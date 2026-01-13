@@ -38,22 +38,48 @@
 
 #define GPIO_DAT_REG_OFFSET	0x10
 
-#define GPIO_DRV_REG_OFFSET	0x14
-
 /*		Newer SoCs use a slightly different register layout */
-#ifdef CONFIG_SUNXI_NEW_PINCTRL
+#if defined(CONFIG_SUNXI_NEW_PINCTRL) || defined(CONFIG_SUNXI_A733_PINCTRL)
 /* pin drive strength: 4 bits per pin */
 #define GPIO_DRV_INDEX(pin)	((pin) / 8)
 #define GPIO_DRV_OFFSET(pin)	(((pin) % 8) * 4)
+#define GPIO_DRV_MASK		0xfU
 
-#define GPIO_PULL_REG_OFFSET	0x24
+/*
+ * On A733, main PIO (0x02000000) places DRV at 0x20 and PULL at 0x30, whereas
+ * R-PIO (0x07025000) retains the NCAT2 layout (DRV at 0x14, PULL at 0x24).
+ */
+static inline u32 gpio_drv_reg_offset(void *bank_base)
+{
+	if (IS_ENABLED(CONFIG_SUNXI_A733_PINCTRL) &&
+	    (uintptr_t)bank_base < SUNXI_R_PIO_BASE)
+		return 0x20;
+	return 0x14;
+}
+
+static inline u32 gpio_pull_reg_offset(void *bank_base)
+{
+	if (IS_ENABLED(CONFIG_SUNXI_A733_PINCTRL) &&
+	    (uintptr_t)bank_base < SUNXI_R_PIO_BASE)
+		return 0x30;
+	return 0x24;
+}
 
 #else /* older generation pin controllers */
 /* pin drive strength: 2 bits per pin */
 #define GPIO_DRV_INDEX(pin)	((pin) / 16)
 #define GPIO_DRV_OFFSET(pin)	(((pin) % 16) * 2)
+#define GPIO_DRV_MASK		0x3U
 
-#define GPIO_PULL_REG_OFFSET	0x1c
+static inline u32 gpio_drv_reg_offset(void *bank_base)
+{
+	return 0x14;
+}
+
+static inline u32 gpio_pull_reg_offset(void *bank_base)
+{
+	return 0x1c;
+}
 #endif
 
 #define GPIO_PULL_INDEX(pin)	(((pin) & 0x1f) >> 4)
@@ -65,12 +91,15 @@ static void* BANK_TO_GPIO(int bank)
 
 	if (bank < SUNXI_GPIO_L) {
 		pio_base = (void *)(uintptr_t)SUNXI_PIO_BASE;
+		if (IS_ENABLED(CONFIG_SUNXI_A733_PINCTRL))
+			return pio_base + SUN60I_A733_PINCTRL_BANK_OFFSET +
+			       bank * SUN60I_A733_PINCTRL_BANK_SIZE;
+		return pio_base + bank * SUNXI_PINCTRL_BANK_SIZE;
 	} else {
 		pio_base = (void *)(uintptr_t)SUNXI_R_PIO_BASE;
 		bank -= SUNXI_GPIO_L;
+		return pio_base + bank * SUNXI_PINCTRL_BANK_SIZE;
 	}
-
-	return pio_base + bank * SUNXI_PINCTRL_BANK_SIZE;
 }
 
 void sunxi_gpio_set_cfgbank(void *bank_base, int pin_offset, u32 val)
@@ -136,8 +165,8 @@ void sunxi_gpio_set_drv_bank(void *bank_base, u32 pin_offset, u32 val)
 	u32 index = GPIO_DRV_INDEX(pin_offset);
 	u32 offset = GPIO_DRV_OFFSET(pin_offset);
 
-	clrsetbits_le32(bank_base + GPIO_DRV_REG_OFFSET + index * 4,
-			0x3U << offset, val << offset);
+	clrsetbits_le32(bank_base + gpio_drv_reg_offset(bank_base) + index * 4,
+			GPIO_DRV_MASK << offset, val << offset);
 }
 
 void sunxi_gpio_set_pull(u32 pin, u32 val)
@@ -153,7 +182,7 @@ void sunxi_gpio_set_pull_bank(void *bank_base, int pin_offset, u32 val)
 	u32 index = GPIO_PULL_INDEX(pin_offset);
 	u32 offset = GPIO_PULL_OFFSET(pin_offset);
 
-	clrsetbits_le32(bank_base + GPIO_PULL_REG_OFFSET + index * 4,
+	clrsetbits_le32(bank_base + gpio_pull_reg_offset(bank_base) + index * 4,
 			0x3U << offset, val << offset);
 }
 

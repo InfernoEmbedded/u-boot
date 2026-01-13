@@ -472,6 +472,13 @@ config SUNXI_NEW_PINCTRL
 	  The Allwinner D1 and other new SoCs use a different register map
 	  for the GPIO block, which we need to know about in the SPL.
 
+config SUNXI_A733_PINCTRL
+	bool
+	depends on SUNXI_GPIO
+	help
+	  The Allwinner A733 uses a 0x80-byte bank stride starting at offset
+	  0x80 for main PIO while retaining 0x30-byte banks for R-PIO.
+
 config XILINX_GPIO
 	bool "Xilinx GPIO driver"
 	depends on DM_GPIO
