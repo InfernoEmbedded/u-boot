@@ -101,13 +101,14 @@ static int mmc_set_mod_clk(struct sunxi_mmc_priv *priv, unsigned int hz)
 			pll_hz /= 2;
 
 		/*
-		 * The A523/T527 uses PERIPH0_400M as the MMC0/1 input clock,
-		 * and PERIPH0_800M for MMC2. There is also the hidden divider
-		 * of 2. The clock code reports 600 MHz for PERIPH0.
+		 * The A523/T527 and A733 use PERIPH0_400M as the MMC0/1 input
+		 * clock, and PERIPH0_800M for MMC2. There is also the hidden
+		 * divider of 2. The clock code reports 600 MHz for PERIPH0.
 		 * Adjust the calculation accordingly: 600 * hidden2 / 3 for
 		 * MMC0/1, and 600 * hidden2 / 3 * 2 for MMC2.
 		 */
-		if (IS_ENABLED(CONFIG_MACH_SUN55I_A523)) {
+		if (IS_ENABLED(CONFIG_MACH_SUN55I_A523) ||
+		    IS_ENABLED(CONFIG_MACH_SUN60I_A733)) {
 			pll_hz /= 3;
 			if (priv->mmc_no == 2)
 				pll_hz *= 2;
@@ -166,8 +167,9 @@ static int mmc_set_mod_clk(struct sunxi_mmc_priv *priv, unsigned int hz)
 			CCM_MMC_CTRL_SCLK_DLY(sclk_dly);
 	}
 
-	/* The A523 has a second divider, not a shift. */
-	if (IS_ENABLED(CONFIG_MACH_SUN55I_A523))
+	/* The A523 and A733 have a second divider, not a shift. */
+	if (IS_ENABLED(CONFIG_MACH_SUN55I_A523) ||
+	    IS_ENABLED(CONFIG_MACH_SUN60I_A733))
 		n = (1U << n) - 1;
 
 	writel(CCM_MMC_CTRL_ENABLE| pll | CCM_MMC_CTRL_N(n) |
@@ -585,7 +587,8 @@ struct mmc *sunxi_mmc_init(int sdc_no)
 
 	if ((IS_ENABLED(CONFIG_MACH_SUN50I) || IS_ENABLED(CONFIG_MACH_SUN8I) ||
 	    IS_ENABLED(CONFIG_MACH_SUN9I) || IS_ENABLED(CONFIG_SUN50I_GEN_H6) ||
-	    IS_ENABLED(CONFIG_MACH_SUN55I_A523)) && (sdc_no == 2))
+	    IS_ENABLED(CONFIG_MACH_SUN55I_A523) ||
+	    IS_ENABLED(CONFIG_MACH_SUN60I_A733)) && (sdc_no == 2))
 		cfg->host_caps = MMC_MODE_8BIT;
 
 	cfg->host_caps |= MMC_MODE_HS_52MHz | MMC_MODE_HS;
@@ -611,6 +614,10 @@ struct mmc *sunxi_mmc_init(int sdc_no)
 	writel(SUNXI_MMC_COMMON_CLK_GATE | SUNXI_MMC_COMMON_RESET,
 	       SUNXI_MMC_COMMON_BASE + 4 * sdc_no);
 #endif
+#elif defined(CONFIG_MACH_SUN60I_A733)
+	/* A733 has individual BGR registers per MMC channel */
+	setbits_le32(ccm + CCU_A733_MMC_BGR_REG(sdc_no),
+		     BIT(GATE_SHIFT) | BIT(RESET_SHIFT));
 #else /* CONFIG_SUN50I_GEN_H6 */
 	setbits_le32(ccm + CCU_H6_MMC_GATE_RESET, 1 << sdc_no);
 	/* unassert reset */
@@ -669,16 +676,19 @@ static const struct dm_mmc_ops sunxi_mmc_ops = {
 	.get_cd		= sunxi_mmc_getcd,
 };
 
-static unsigned get_mclk_offset(void)
+static unsigned int get_mclk_offset(unsigned int mmc_no)
 {
+	if (IS_ENABLED(CONFIG_MACH_SUN60I_A733))
+		return 0xd00 + mmc_no * 0x10;
+
 	if (IS_ENABLED(CONFIG_MACH_SUN9I))
-		return 0x410;
+		return 0x410 + mmc_no * 4;
 
 	if (IS_ENABLED(CONFIG_SUN50I_GEN_H6) || IS_ENABLED(CONFIG_SUNXI_GEN_NCAT2))
-		return 0x830;
+		return 0x830 + mmc_no * 4;
 
-	return 0x88;
-};
+	return 0x88 + mmc_no * 4;
+}
 
 static int sunxi_mmc_probe(struct udevice *dev)
 {
@@ -715,7 +725,7 @@ static int sunxi_mmc_probe(struct udevice *dev)
 	ccu_reg = (u32 *)(uintptr_t)ofnode_get_addr(args.node);
 
 	priv->mmc_no = ((uintptr_t)priv->reg - SUNXI_MMC0_BASE) / 0x1000;
-	priv->mclkreg = (void *)ccu_reg + get_mclk_offset() + priv->mmc_no * 4;
+	priv->mclkreg = (void *)ccu_reg + get_mclk_offset(priv->mmc_no);
 
 	ret = clk_get_by_name(dev, "ahb", &gate_clk);
 	if (!ret)
