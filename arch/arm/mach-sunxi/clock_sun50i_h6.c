@@ -11,8 +11,47 @@
 #endif
 
 #ifdef CONFIG_XPL_BUILD
+#ifdef CONFIG_MACH_SUN60I_A733
+#define SUNXI_CCU_MBUS_MAT_CLK_GATING		(SUNXI_CCM_BASE + 0x05c0UL)
+#define SUNXI_CCU_MBUS_MAT_CLK_GATING_VAL	0x110103ffU
+#define SUNXI_CCU_MBUS_MAT_CLK_ENABLE		(SUNXI_CCM_BASE + 0x05e0UL)
+#define SUNXI_CCU_MBUS_MAT_CLK_ENABLE_VAL	0xf1055803U
+#define SUNXI_CCU_MBUS_MASTER_GATE		(SUNXI_CCM_BASE + 0x05e4UL)
+#define SUNXI_CCU_MBUS_MASTER_GATE_VAL		0x0007ffffU
+
+#define SUNXI_SYSCTRL_RESCAL_CTRL		(SUNXI_SRAMC_BASE + 0x0160UL)
+#define SUNXI_SYSCTRL_RESCAL_CTRL_EN		BIT(8)
+#define SUNXI_SYSCTRL_RESCAL_CAL		(SUNXI_SRAMC_BASE + 0x0168UL)
+#define SUNXI_SYSCTRL_RESCAL_CAL_MASK		0xffU
+
+/*
+ * On A733, the BROM configures PLL_PERIPH0 and APB/AXI root dividers before
+ * SPL entry, while TF-A BL31 (sunxi_security_setup) configures TrustZone SPC,
+ * CCU/PRCM security switches, and IOMMU bypass before Non-Secure EL2 entry.
+ * SPL only needs to ungate the MBUS matrix clocks and enable SYSCTRL ZQ/pad
+ * resistor calibration prior to LPDDR5 training.
+ */
+static void sunxi_a733_bus_and_rescal_init(void)
+{
+	writel(SUNXI_CCU_MBUS_MAT_CLK_GATING_VAL,
+	       (void __iomem *)SUNXI_CCU_MBUS_MAT_CLK_GATING);
+	writel(SUNXI_CCU_MBUS_MAT_CLK_ENABLE_VAL,
+	       (void __iomem *)SUNXI_CCU_MBUS_MAT_CLK_ENABLE);
+	writel(SUNXI_CCU_MBUS_MASTER_GATE_VAL,
+	       (void __iomem *)SUNXI_CCU_MBUS_MASTER_GATE);
+
+	setbits_le32((void __iomem *)SUNXI_SYSCTRL_RESCAL_CTRL,
+		     SUNXI_SYSCTRL_RESCAL_CTRL_EN);
+	clrbits_le32((void __iomem *)SUNXI_SYSCTRL_RESCAL_CAL,
+		     SUNXI_SYSCTRL_RESCAL_CAL_MASK);
+}
+#endif
+
 void clock_init_safe(void)
 {
+#ifdef CONFIG_MACH_SUN60I_A733
+	sunxi_a733_bus_and_rescal_init();
+#else
 	void *const ccm = (void *)SUNXI_CCM_BASE;
 	void *const prcm = (void *)SUNXI_PRCM_BASE;
 
@@ -72,11 +111,25 @@ void clock_init_safe(void)
 		writel(MBUS_CLK_SRC_PLL6X2 | MBUS_CLK_M(3),
 		       ccm + CCU_H6_MBUS_CFG);
 	}
+#endif
 }
 
 void clock_init_uart(void)
 {
 	void *const ccm = (void *)SUNXI_CCM_BASE;
+
+	if (IS_ENABLED(CONFIG_MACH_SUN60I_A733)) {
+		/* A733: APB_UART clock source is OSC24M / 1 */
+		writel(APB2_CLK_SRC_OSC24M |
+		       APB2_CLK_RATE_N_1 |
+		       APB2_CLK_RATE_M(1),
+		       ccm + CCU_A733_APB_UART_CFG);
+
+		/* Deassert reset and enable clock gate for console UART */
+		setbits_le32(ccm + CCU_A733_UART_BGR_REG(CONFIG_CONS_INDEX - 1),
+			     BIT(RESET_SHIFT) | BIT(GATE_SHIFT));
+		return;
+	}
 
 	/* uart clock source is apb2 */
 	writel(APB2_CLK_SRC_OSC24M|
@@ -199,6 +252,10 @@ void clock_set_pll1(unsigned int clk)
 
 	clk /= 24000000;
 
+	/* BROM and TF-A configure cluster PLLs on A733 */
+	if (IS_ENABLED(CONFIG_MACH_SUN60I_A733))
+		return;
+
 	if (IS_ENABLED(CONFIG_MACH_SUN55I_A523))
 		clock_a523_set_cpu_plls(clk);
 	else
@@ -217,6 +274,9 @@ int clock_twi_onoff(int port, int state)
 	if (port == 5) {
 		shift = 0;
 		ptr = prcm + CCU_PRCM_I2C_GATE_RESET;
+	} else if (IS_ENABLED(CONFIG_MACH_SUN60I_A733)) {
+		shift = 0;
+		ptr = ccm + CCU_A733_I2C_BGR_REG(port);
 	} else {
 		shift = port;
 		ptr = ccm + CCU_H6_I2C_GATE_RESET;
@@ -236,13 +296,22 @@ int clock_twi_onoff(int port, int state)
 unsigned int clock_get_pll6(void)
 {
 	void *const ccm = (void *)SUNXI_CCM_BASE;
-	uint32_t rval = readl(ccm + CCU_H6_PLL6_CFG);
-	int n = ((rval & CCM_PLL6_CTRL_N_MASK) >> CCM_PLL6_CTRL_N_SHIFT) + 1;
-	int div2 = ((rval & CCM_PLL6_CTRL_DIV2_MASK) >>
-		    CCM_PLL6_CTRL_DIV2_SHIFT) + 1;
-	int div1, m;
+	int div1, div2, m, n;
+	u32 rval;
 
-	if (IS_ENABLED(CONFIG_SUNXI_GEN_NCAT2)) {
+	if (IS_ENABLED(CONFIG_MACH_SUN60I_A733))
+		rval = readl(ccm + CCU_A733_PLL6_CFG);
+	else
+		rval = readl(ccm + CCU_H6_PLL6_CFG);
+
+	n = ((rval & CCM_PLL6_CTRL_N_MASK) >> CCM_PLL6_CTRL_N_SHIFT) + 1;
+	div2 = ((rval & CCM_PLL6_CTRL_DIV2_MASK) >>
+		CCM_PLL6_CTRL_DIV2_SHIFT) + 1;
+
+	if (IS_ENABLED(CONFIG_MACH_SUN60I_A733)) {
+		div1 = ((rval & CCM_A733_PLL6_CTRL_P0_MASK) >>
+			CCM_A733_PLL6_CTRL_P0_SHIFT) + 1;
+	} else if (IS_ENABLED(CONFIG_SUNXI_GEN_NCAT2)) {
 		div1 = ((rval & CCM_PLL6_CTRL_P0_MASK) >>
 			CCM_PLL6_CTRL_P0_SHIFT) + 1;
 	} else {
