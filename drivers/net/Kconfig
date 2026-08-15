@@ -285,6 +285,14 @@ config DWC_ETH_QOS_STARFIVE
 	  The Synopsys Designware Ethernet QOS IP block with specific
 	  configuration used in STARFIVE  JH7110 soc.
 
+config DWC_ETH_QOS_SUNXI
+	bool "Synopsys DWC Ethernet QOS device support for Allwinner SoCs"
+	depends on DWC_ETH_QOS
+	default ARCH_SUNXI
+	help
+	  The Synopsys Designware Ethernet QOS IP block with specific
+	  configuration used in Allwinner A523/T527/A733/T736 SoCs.
+
 config E1000
 	bool "Intel PRO/1000 Gigabit Ethernet support"
 	depends on PCI
