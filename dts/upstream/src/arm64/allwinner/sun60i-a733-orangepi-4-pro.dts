@@ -1,0 +1,107 @@
+// SPDX-License-Identifier: (GPL-2.0-only OR MIT)
+/*
+ * Copyright (C) 2026 Alastair D'Silva <alastair@d-silva.org>
+ */
+
+/dts-v1/;
+
+#include "sun60i-a733.dtsi"
+
+#include <dt-bindings/gpio/gpio.h>
+
+/ {
+	model = "OrangePi 4 Pro";
+	compatible = "xunlong,orangepi-4-pro", "allwinner,sun60i-a733";
+
+	aliases {
+		ethernet0 = &gmac0;
+		serial0 = &uart0;
+		mmc0 = &mmc0;
+		mmc2 = &mmc2;
+	};
+
+	chosen {
+		stdout-path = "serial0:115200n8";
+	};
+};
+
+&uart0 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&uart0_pb_pins>;
+	status = "okay";
+};
+
+&mmc0 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&mmc0_pins>;
+	vmmc-supply = <&reg_dldo1>;
+	cd-gpios = <&pio 5 6 GPIO_ACTIVE_LOW>; /* PF6 */
+	broken-cd;
+	bus-width = <4>;
+	status = "okay";
+};
+
+&mmc2 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&mmc2_pins>;
+	vmmc-supply = <&reg_dldo1>;
+	bus-width = <8>;
+	non-removable;
+	status = "okay";
+};
+
+&r_i2c0 {
+	status = "okay";
+
+	axp8191: pmic@35 {
+		compatible = "x-powers,axp8191";
+		reg = <0x35>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		regulators {
+			reg_dldo1: dldo1 {
+				regulator-name = "vcc-sd";
+				regulator-min-microvolt = <3300000>;
+				regulator-max-microvolt = <3300000>;
+				regulator-always-on;
+				regulator-boot-on;
+			};
+
+			reg_dc1sw1: dc1sw1 {
+				regulator-name = "vcc-ephy";
+				regulator-min-microvolt = <3300000>;
+				regulator-max-microvolt = <3300000>;
+				regulator-always-on;
+				regulator-boot-on;
+			};
+
+			reg_dc1sw2: dc1sw2 {
+				regulator-name = "vcc-gmac-io";
+				regulator-min-microvolt = <3300000>;
+				regulator-max-microvolt = <3300000>;
+				regulator-always-on;
+				regulator-boot-on;
+			};
+		};
+	};
+};
+
+&gmac0 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&gmac0_pins>;
+	phy-mode = "rgmii-id";
+	phy-handle = <&phy0>;
+	phy-supply = <&reg_dc1sw1>;
+	dwmac-supply = <&reg_dc1sw2>;
+	snps,reset-gpio = <&pio 7 16 GPIO_ACTIVE_LOW>; /* PH16 */
+	snps,reset-delays-us = <0 10000 150000>;
+	status = "okay";
+
+	mdio0: mdio {
+		phy0: ethernet-phy@1 {
+			reg = <1>;
+			compatible = "ethernet-phy-ieee802.3-c22";
+		};
+	};
+};
