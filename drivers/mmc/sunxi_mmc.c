@@ -107,7 +107,8 @@ static int mmc_set_mod_clk(struct sunxi_mmc_priv *priv, unsigned int hz)
 		 * Adjust the calculation accordingly: 600 * hidden2 / 3 for
 		 * MMC0/1, and 600 * hidden2 / 3 * 2 for MMC2.
 		 */
-		if (IS_ENABLED(CONFIG_MACH_SUN55I_A523)) {
+		if (IS_ENABLED(CONFIG_MACH_SUN55I_A523) ||
+		    IS_ENABLED(CONFIG_MACH_SUN60I_A733)) {
 			pll_hz /= 3;
 			if (priv->mmc_no == 2)
 				pll_hz *= 2;
@@ -166,8 +167,9 @@ static int mmc_set_mod_clk(struct sunxi_mmc_priv *priv, unsigned int hz)
 			CCM_MMC_CTRL_SCLK_DLY(sclk_dly);
 	}
 
-	/* The A523 has a second divider, not a shift. */
-	if (IS_ENABLED(CONFIG_MACH_SUN55I_A523))
+	/* The A523/A733 has a second divider, not a shift. */
+	if (IS_ENABLED(CONFIG_MACH_SUN55I_A523) ||
+	    IS_ENABLED(CONFIG_MACH_SUN60I_A733))
 		n = (1U << n) - 1;
 
 	writel(CCM_MMC_CTRL_ENABLE| pll | CCM_MMC_CTRL_N(n) |
@@ -576,7 +578,8 @@ struct mmc *sunxi_mmc_init(int sdc_no)
 	cfg->host_caps = MMC_MODE_4BIT;
 
 	if ((IS_ENABLED(CONFIG_MACH_SUN50I) || IS_ENABLED(CONFIG_MACH_SUN8I) ||
-	    IS_ENABLED(CONFIG_SUN50I_GEN_H6) || IS_ENABLED(CONFIG_MACH_SUN55I_A523)) &&
+	    IS_ENABLED(CONFIG_SUN50I_GEN_H6) || IS_ENABLED(CONFIG_MACH_SUN55I_A523) ||
+	    IS_ENABLED(CONFIG_MACH_SUN60I_A733)) &&
 	    (sdc_no == 2))
 		cfg->host_caps = MMC_MODE_8BIT;
 
