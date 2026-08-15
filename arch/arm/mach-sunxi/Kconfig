@@ -62,7 +62,12 @@ config DRAM_SUN55I_A523
 	help
 	  Select this DRAM controller driver for A523/T527 SoCs.
 
-if DRAM_SUN50I_H616 || DRAM_SUN50I_A133 || DRAM_SUN55I_A523
+config DRAM_SUN60I_A733
+	bool
+	help
+	  Select this DRAM controller driver for A733/T736 SoCs.
+
+if DRAM_SUN50I_H616 || DRAM_SUN50I_A133 || DRAM_SUN55I_A523 || DRAM_SUN60I_A733
 config DRAM_SUNXI_DX_ODT
 	hex "DRAM DX ODT parameter"
 	help
@@ -181,7 +186,7 @@ config DRAM_SUNXI_TPR13
 
 config DRAM_SUNXI_TPR14
 	hex "DRAM TPR14 parameter"
-	depends on DRAM_SUN50I_A133 || MACH_SUN55I_A523
+	depends on DRAM_SUN50I_A133 || MACH_SUN55I_A523 || MACH_SUN60I_A733
 	default 0x48484848
 	help
 	  TPR14 value from vendor DRAM settings.
@@ -220,6 +225,7 @@ config AXP_PMIC_BUS
 config SUNXI_SRAM_ADDRESS
 	hex
 	default 0x10000 if MACH_SUN9I || MACH_SUN50I || MACH_SUN50I_H5
+	default 0x47000 if MACH_SUN60I_A733
 	default 0x44000 if MACH_SUN55I_A523
 	default 0x20000 if SUN50I_GEN_H6 || SUNXI_GEN_NCAT2
 	default 0x0
@@ -234,6 +240,7 @@ config SUNXI_RVBAR_ADDRESS
 	depends on ARM64
 	default 0x08100040 if MACH_SUN50I_A133
 	default 0x08000040 if MACH_SUN55I_A523
+	default 0x08001004 if MACH_SUN60I_A733
 	default 0x09010040 if SUN50I_GEN_H6
 	default 0x017000a0
 	---help---
@@ -262,7 +269,7 @@ config SUNXI_BL31_BASE
 	default 0x00044000 if MACH_SUN50I || MACH_SUN50I_H5
 	default 0x40000000 if MACH_SUN50I_H616
 	default 0x00104000 if SUN50I_GEN_H6
-	default 0x00054000 if MACH_SUN55I_A523
+	default 0x00054000 if MACH_SUN55I_A523 || MACH_SUN60I_A733
 	default 0x0
 	help
 	  Address where BL31 (TF-A) is loaded, or zero if BL31 is not used.
@@ -344,6 +351,7 @@ config MACH_SUNXI_H3_H5
 # TODO: try out A80's 8GiB DRAM space
 config SUNXI_DRAM_MAX_SIZE
 	hex
+	default 0x400000000 if MACH_SUN60I_A733
 	default 0x100000000 if MACH_SUN50I_H616 || MACH_SUN50I_A133 || MACH_SUN55I_A523
 	default 0xC0000000 if MACH_SUN50I || MACH_SUN50I_H5 || MACH_SUN50I_H6
 	default 0x80000000
@@ -559,6 +567,17 @@ config MACH_SUN55I_A523
 	select SPL_LOAD_FIT if SPL
 	imply OF_UPSTREAM
 
+config MACH_SUN60I_A733
+	bool "sun60i (Allwinner A733/T736)"
+	select ARM64
+	select SUNXI_GEN_NCAT2
+	select SUNXI_NEW_PINCTRL
+	select DRAM_SUN60I_A733
+	select FIT
+	select SPL_LOAD_FIT if SPL
+	select LINUX_KERNEL_IMAGE_HEADER
+	imply OF_UPSTREAM
+
 endchoice
 
 # The sun8i SoCs share a lot, this helps to avoid a lot of "if A23 || A33"
@@ -614,6 +633,7 @@ config SUNXI_DRAM_DDR4
 
 choice
 	prompt "DRAM Type and Timing"
+	default SUNXI_DRAM_A733_LPDDR4 if MACH_SUN60I_A733
 	default SUNXI_DRAM_A523_LPDDR4 if MACH_SUN55I_A523
 	default SUNXI_DRAM_DDR3_1333 if !MACH_SUN8I_V3S
 	default SUNXI_DRAM_DDR2_V3S if MACH_SUN8I_V3S
@@ -713,6 +733,13 @@ config SUNXI_DRAM_A523_LPDDR4
 	help
 	  This option is the LPDDR4 timing used by the stock boot0 by
 	  Allwinner.
+
+config SUNXI_DRAM_A733_LPDDR4
+	bool "LPDDR4/LPDDR5 DRAM chips on the A733/T736 DRAM controller"
+	select SUNXI_DRAM_LPDDR4
+	depends on DRAM_SUN60I_A733
+	help
+	  This option is the LPDDR4/LPDDR5 timing used for A733/T736.
 endchoice
 endif
 
@@ -734,6 +761,7 @@ config DRAM_CLK
 	default 744 if MACH_SUN50I_H6
 	default 720 if MACH_SUN50I_H616 || MACH_SUN50I_A133
 	default 1200 if MACH_SUN55I_A523
+	default 1800 if MACH_SUN60I_A733
 	---help---
 	Set the dram clock speed, valid range 240 - 480 (prior to sun9i),
 	must be a multiple of 24. For the sun9i (A80), the tested values
@@ -753,6 +781,7 @@ config DRAM_ZQ
 	depends on !MACH_SUN50I_H616
 	depends on !MACH_SUN50I_A133
 	depends on !MACH_SUN55I_A523
+	depends on !MACH_SUN60I_A733
 	default 123 if MACH_SUN4I || MACH_SUN5I || MACH_SUN6I || \
 		       MACH_SUN8I_A23 || MACH_SUN8I_A33 || MACH_SUN8I_A83T
 	default 127 if MACH_SUN7I
@@ -767,6 +796,7 @@ config DRAM_ODT_EN
 	bool "sunxi dram odt enable"
 	depends on !MACH_SUN50I_H616
 	depends on !MACH_SUN55I_A523
+	depends on !MACH_SUN60I_A733
 	default y if MACH_SUN8I_A23
 	default y if MACH_SUNXI_H3_H5
 	default y if MACH_SUN8I_R40
@@ -876,6 +906,7 @@ config SYS_CONFIG_NAME
 	default "sun50i" if MACH_SUN50I_H616
 	default "sun50i" if MACH_SUN50I_A133
 	default "sun55i" if MACH_SUN55I_A523
+	default "sun60i" if MACH_SUN60I_A733
 
 config SYS_BOARD
 	default "sunxi"
