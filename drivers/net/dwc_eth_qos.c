@@ -1659,6 +1659,16 @@ static const struct udevice_id eqos_ids[] = {
 		.data = (ulong)&eqos_adi_config
 	},
 #endif
+#if IS_ENABLED(CONFIG_DWC_ETH_QOS_SUNXI)
+	{
+		.compatible = "allwinner,sun60iw2-gmac",
+		.data = (ulong)&eqos_sunxi_config
+	},
+	{
+		.compatible = "allwinner,sun55i-a523-gmac",
+		.data = (ulong)&eqos_sunxi_config
+	},
+#endif
 	{ }
 };
 
