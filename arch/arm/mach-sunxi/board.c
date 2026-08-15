@@ -142,8 +142,15 @@ static int gpio_init(void)
 	sunxi_gpio_set_cfgpin(SUNXI_GPB(10), SUN50I_H616_GPH_UART0);
 	sunxi_gpio_set_pull(SUNXI_GPB(10), SUNXI_GPIO_PULL_UP);
 #elif CONFIG_CONS_INDEX == 1 && defined(CONFIG_MACH_SUN55I_A523)
-	sunxi_gpio_set_cfgpin(SUNXI_GPB(9), 2);
-	sunxi_gpio_set_cfgpin(SUNXI_GPB(10), 2);
+	sunxi_gpio_set_cfgpin(SUNXI_GPB(9), SUN55I_A523_GPB_UART0);
+	sunxi_gpio_set_cfgpin(SUNXI_GPB(10), SUN55I_A523_GPB_UART0);
+	sunxi_gpio_set_pull(SUNXI_GPB(10), SUNXI_GPIO_PULL_UP);
+#elif CONFIG_CONS_INDEX == 1 && defined(CONFIG_MACH_SUN60I_A733)
+	sunxi_gpio_set_cfgpin(SUNXI_GPB(0), SUN60I_A733_GPB_UART0);
+	sunxi_gpio_set_cfgpin(SUNXI_GPB(1), SUN60I_A733_GPB_UART0);
+	sunxi_gpio_set_pull(SUNXI_GPB(1), SUNXI_GPIO_PULL_UP);
+	sunxi_gpio_set_cfgpin(SUNXI_GPB(9), SUN60I_A733_GPB_UART0_ALT);
+	sunxi_gpio_set_cfgpin(SUNXI_GPB(10), SUN60I_A733_GPB_UART0_ALT);
 	sunxi_gpio_set_pull(SUNXI_GPB(10), SUNXI_GPIO_PULL_UP);
 #elif CONFIG_CONS_INDEX == 1 && defined(CONFIG_MACH_SUN8I_A83T)
 	sunxi_gpio_set_cfgpin(SUNXI_GPB(9), SUN8I_A83T_GPB_UART0);
