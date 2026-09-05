@@ -33,6 +33,8 @@ struct sunxi_pinctrl_desc {
 	u8					num_functions;
 	u8					first_bank;
 	u8					num_banks;
+	u16					bank_offset;
+	u16					bank_stride;
 };
 
 struct sunxi_pinctrl_plat {
@@ -74,6 +76,15 @@ static const char *sunxi_pinctrl_get_function_name(struct udevice *dev,
 	return desc->functions[func_selector].name;
 }
 
+static inline void *sunxi_pinctrl_bank_regs(const struct sunxi_pinctrl_plat *plat,
+					    const struct sunxi_pinctrl_desc *desc,
+					    int bank)
+{
+	u16 stride = desc->bank_stride ? desc->bank_stride : SUNXI_PINCTRL_BANK_SIZE;
+
+	return plat->base + desc->bank_offset + bank * stride;
+}
+
 static int sunxi_pinctrl_pinmux_set(struct udevice *dev, uint pin_selector,
 				    uint func_selector)
 {
@@ -81,14 +92,14 @@ static int sunxi_pinctrl_pinmux_set(struct udevice *dev, uint pin_selector,
 	struct sunxi_pinctrl_plat *plat = dev_get_plat(dev);
 	int bank = pin_selector / SUNXI_GPIOS_PER_BANK;
 	int pin	 = pin_selector % SUNXI_GPIOS_PER_BANK;
+	void *regs = sunxi_pinctrl_bank_regs(plat, desc, bank);
 
 	debug("set mux: %-4s => %s (%d)\n",
 	      sunxi_pinctrl_get_pin_name(dev, pin_selector),
 	      sunxi_pinctrl_get_function_name(dev, func_selector),
 	      desc->functions[func_selector].mux);
 
-	sunxi_gpio_set_cfgbank(plat->base + bank * SUNXI_PINCTRL_BANK_SIZE,
-			       pin, desc->functions[func_selector].mux);
+	sunxi_gpio_set_cfgbank(regs, pin, desc->functions[func_selector].mux);
 
 	return 0;
 }
@@ -101,9 +112,10 @@ static const struct pinconf_param sunxi_pinctrl_pinconf_params[] = {
 };
 
 static int sunxi_pinctrl_pinconf_set_pull(struct sunxi_pinctrl_plat *plat,
+					  const struct sunxi_pinctrl_desc *desc,
 					  uint bank, uint pin, uint bias)
 {
-	void *regs = plat->base + bank * SUNXI_PINCTRL_BANK_SIZE;
+	void *regs = sunxi_pinctrl_bank_regs(plat, desc, bank);
 
 	sunxi_gpio_set_pull_bank(regs, pin, bias);
 
@@ -111,9 +123,10 @@ static int sunxi_pinctrl_pinconf_set_pull(struct sunxi_pinctrl_plat *plat,
 }
 
 static int sunxi_pinctrl_pinconf_set_drive(struct sunxi_pinctrl_plat *plat,
+					   const struct sunxi_pinctrl_desc *desc,
 					   uint bank, uint pin, uint drive)
 {
-	void *regs = plat->base + bank * SUNXI_PINCTRL_BANK_SIZE;
+	void *regs = sunxi_pinctrl_bank_regs(plat, desc, bank);
 
 	if (drive < 10 || drive > 40)
 		return -EINVAL;
@@ -127,6 +140,7 @@ static int sunxi_pinctrl_pinconf_set_drive(struct sunxi_pinctrl_plat *plat,
 static int sunxi_pinctrl_pinconf_set(struct udevice *dev, uint pin_selector,
 				     uint param, uint val)
 {
+	const struct sunxi_pinctrl_desc *desc = dev_get_priv(dev);
 	struct sunxi_pinctrl_plat *plat = dev_get_plat(dev);
 	int bank = pin_selector / SUNXI_GPIOS_PER_BANK;
 	int pin  = pin_selector % SUNXI_GPIOS_PER_BANK;
@@ -135,9 +149,9 @@ static int sunxi_pinctrl_pinconf_set(struct udevice *dev, uint pin_selector,
 	case PIN_CONFIG_BIAS_DISABLE:
 	case PIN_CONFIG_BIAS_PULL_DOWN:
 	case PIN_CONFIG_BIAS_PULL_UP:
-		return sunxi_pinctrl_pinconf_set_pull(plat, bank, pin, val);
+		return sunxi_pinctrl_pinconf_set_pull(plat, desc, bank, pin, val);
 	case PIN_CONFIG_DRIVE_STRENGTH:
-		return sunxi_pinctrl_pinconf_set_drive(plat, bank, pin, val);
+		return sunxi_pinctrl_pinconf_set_drive(plat, desc, bank, pin, val);
 	}
 
 	return -EINVAL;
@@ -146,10 +160,12 @@ static int sunxi_pinctrl_pinconf_set(struct udevice *dev, uint pin_selector,
 static int sunxi_pinctrl_get_pin_muxing(struct udevice *dev, uint pin_selector,
 					char *buf, int size)
 {
+	const struct sunxi_pinctrl_desc *desc = dev_get_priv(dev);
 	struct sunxi_pinctrl_plat *plat = dev_get_plat(dev);
 	int bank = pin_selector / SUNXI_GPIOS_PER_BANK;
 	int pin	 = pin_selector % SUNXI_GPIOS_PER_BANK;
-	int mux  = sunxi_gpio_get_cfgbank(plat->base + bank * SUNXI_PINCTRL_BANK_SIZE, pin);
+	void *regs = sunxi_pinctrl_bank_regs(plat, desc, bank);
+	int mux  = sunxi_gpio_get_cfgbank(regs, pin);
 
 	switch (mux) {
 	case SUNXI_GPIO_INPUT:
@@ -207,7 +223,7 @@ static int sunxi_pinctrl_bind(struct udevice *dev)
 		if (!gpio_plat)
 			return -ENOMEM;
 
-		gpio_plat->regs = plat->base + i * SUNXI_PINCTRL_BANK_SIZE;
+		gpio_plat->regs = sunxi_pinctrl_bank_regs(plat, desc, i);
 		gpio_plat->bank_name[0] = 'P';
 		gpio_plat->bank_name[1] = 'A' + desc->first_bank + i;
 		gpio_plat->bank_name[2] = '\0';
@@ -791,7 +807,7 @@ static const struct sunxi_pinctrl_function sun60i_a733_pinctrl_functions[] = {
 	{ "mmc1",	2 },	/* PG0-PG5 */
 	{ "mmc2",	3 },	/* PC0-PC16 */
 	{ "spi0",	4 },	/* PC0-PC7, PC15-PC16 */
-	{ "uart0",	2 },	/* PB0-PB1 */
+	{ "uart0",	3 },	/* PB0-PB1 */
 	{ "uart1",	2 },	/* PG6-PG7 */
 };
 
@@ -800,6 +816,8 @@ static const struct sunxi_pinctrl_desc __maybe_unused sun60i_a733_pinctrl_desc =
 	.num_functions	= ARRAY_SIZE(sun60i_a733_pinctrl_functions),
 	.first_bank	= SUNXI_GPIO_A,
 	.num_banks	= 11,
+	.bank_offset	= 0x80,
+	.bank_stride	= 0x80,
 };
 
 static const struct sunxi_pinctrl_function sun50i_h616_r_pinctrl_functions[] = {

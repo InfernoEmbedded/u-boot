@@ -65,12 +65,16 @@ static void* BANK_TO_GPIO(int bank)
 
 	if (bank < SUNXI_GPIO_L) {
 		pio_base = (void *)(uintptr_t)SUNXI_PIO_BASE;
+#if defined(CONFIG_MACH_SUN60I_A733)
+		return pio_base + 0x80 + bank * 0x80;
+#else
+		return pio_base + bank * SUNXI_PINCTRL_BANK_SIZE;
+#endif
 	} else {
 		pio_base = (void *)(uintptr_t)SUNXI_R_PIO_BASE;
 		bank -= SUNXI_GPIO_L;
+		return pio_base + bank * SUNXI_PINCTRL_BANK_SIZE;
 	}
-
-	return pio_base + bank * SUNXI_PINCTRL_BANK_SIZE;
 }
 
 void sunxi_gpio_set_cfgbank(void *bank_base, int pin_offset, u32 val)

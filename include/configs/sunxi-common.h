@@ -184,6 +184,12 @@
 #define BOOT_TARGET_DEVICES_MMC(func)
 #endif
 
+#if CONFIG_IS_ENABLED(NVME)
+#define BOOT_TARGET_DEVICES_NVME(func) func(NVME, nvme, 0)
+#else
+#define BOOT_TARGET_DEVICES_NVME(func)
+#endif
+
 #ifdef CONFIG_AHCI
 #define BOOT_TARGET_DEVICES_SCSI(func) func(SCSI, scsi, 0)
 #else
@@ -214,13 +220,14 @@
 		"if test -n ${fel_booted} && test -n ${fel_scriptaddr}; then " \
 			"echo '(FEL boot)'; " \
 			"source ${fel_scriptaddr}; " \
-		"fi\0"
+			"fi\0"
 #define BOOTENV_DEV_NAME_FEL(devtypeu, devtypel, instance) \
 	"fel "
 
 #define BOOT_TARGET_DEVICES(func) \
 	func(FEL, fel, na) \
 	BOOT_TARGET_DEVICES_MMC(func) \
+	BOOT_TARGET_DEVICES_NVME(func) \
 	BOOT_TARGET_DEVICES_SCSI(func) \
 	BOOT_TARGET_DEVICES_USB(func) \
 	BOOT_TARGET_DEVICES_PXE(func) \

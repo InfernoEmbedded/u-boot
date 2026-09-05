@@ -48,11 +48,13 @@ static struct ccu_clk_gate a733_gates[] = {
 	[CLK_GMAC1_PHY]		= GATE(0x1420, BIT(31)),
 	[CLK_GMAC1]		= GATE(0x142c, BIT(0) | BIT(1)),
 
-	[CLK_USB0_OHCI]		= GATE(0x1370, BIT(31)),
-	[CLK_USB1_OHCI]		= GATE(0x1374, BIT(31)),
-	[CLK_USB0_EHCI]		= GATE(0x138c, BIT(4)),
-	[CLK_USB1_EHCI]		= GATE(0x138c, BIT(5)),
-	[CLK_USB]		= GATE(0x138c, BIT(8)),
+	[CLK_USB0_OHCI]		= GATE(0x2300, BIT(31)),
+	[CLK_USB1_OHCI]		= GATE(0x2308, BIT(31)),
+	[CLK_USB]		= GATE(0x2304, BIT(0)),
+	[CLK_USB0_EHCI]		= GATE(0x2304, BIT(4)),
+	[CLK_USB0_DEVICE]	= GATE(0x2304, BIT(8)),
+	[CLK_USB1]		= GATE(0x230c, BIT(0)),
+	[CLK_USB1_EHCI]		= GATE(0x230c, BIT(4)),
 };
 
 static struct ccu_reset a733_resets[] = {
@@ -79,11 +81,13 @@ static struct ccu_reset a733_resets[] = {
 	[RST_BUS_GMAC0]		= RESET(0x141c, BIT(16)),
 	[RST_BUS_GMAC1]		= RESET(0x142c, BIT(16)),
 
-	[RST_USB_0_OHCI]	= RESET(0x138c, BIT(16)),
-	[RST_USB_1_OHCI]	= RESET(0x138c, BIT(17)),
-	[RST_USB_0_EHCI]	= RESET(0x138c, BIT(20)),
-	[RST_USB_1_EHCI]	= RESET(0x138c, BIT(21)),
-	[RST_USB_0_DEVICE]	= RESET(0x138c, BIT(24)),
+	[RST_USB_0_PHY_RSTN]	= RESET(0x2300, BIT(30)),
+	[RST_USB_0_OHCI]	= RESET(0x2304, BIT(16)),
+	[RST_USB_0_EHCI]	= RESET(0x2304, BIT(20)),
+	[RST_USB_0_DEVICE]	= RESET(0x2304, BIT(24)),
+	[RST_USB_1_PHY_RSTN]	= RESET(0x2308, BIT(30)),
+	[RST_USB_1_OHCI]	= RESET(0x230c, BIT(16)),
+	[RST_USB_1_EHCI]	= RESET(0x230c, BIT(20)),
 };
 
 const struct ccu_desc a733_ccu_desc = {
