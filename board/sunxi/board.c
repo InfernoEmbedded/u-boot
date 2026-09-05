@@ -189,6 +189,294 @@ enum env_location env_get_location(enum env_operation op, int prio)
 	return ENVL_UNKNOWN;
 }
 
+#ifdef CONFIG_MACH_SUN60I_A733
+struct cphy_reg {
+	u32 off;
+	u16 val;
+};
+
+static const struct cphy_reg cphy_regs[] = {
+	{ 0x44, 0x1a },
+	{ 0x54, 0x34 },
+	{ 0x58, 0xda },
+	{ 0x64, 0x34 },
+	{ 0x68, 0xda },
+	{ 0xc8, 0x82 },
+	{ 0xca, 0x82 },
+	{ 0xe8, 0x1a },
+	{ 0x208, 0x20 },
+	{ 0x20a, 0x7 },
+	{ 0x218, 0x20 },
+	{ 0x21a, 0x7 },
+	{ 0x228, 0x30c },
+	{ 0x22a, 0x7 },
+	{ 0x248, 0x7 },
+	{ 0x24a, 0x3 },
+	{ 0x24c, 0xf },
+	{ 0x250, 0x132 },
+	{ 0x10088, 0x1a },
+	{ 0x10488, 0x1a },
+	{ 0x10888, 0x1a },
+	{ 0x10c88, 0x1a },
+	{ 0x1008a, 0x82 },
+	{ 0x1048a, 0x82 },
+	{ 0x1088a, 0x82 },
+	{ 0x10c8a, 0x82 },
+	{ 0x10098, 0x1a },
+	{ 0x10498, 0x1a },
+	{ 0x10898, 0x1a },
+	{ 0x10c98, 0x1a },
+	{ 0x1009a, 0x82 },
+	{ 0x1049a, 0x82 },
+	{ 0x1089a, 0x82 },
+	{ 0x10c9a, 0x82 },
+	{ 0x8246, 0xa28 },
+	{ 0x8646, 0xa28 },
+	{ 0x8a46, 0xa28 },
+	{ 0x8e46, 0xa28 },
+	{ 0x342, 0x8600 },
+	{ 0x382, 0x601 },
+	{ 0x89ca, 0x12 },
+	{ 0x8dca, 0x12 },
+	{ 0x81cc, 0x0 },
+	{ 0x85cc, 0x0 },
+	{ 0x81ce, 0x1 },
+	{ 0x85ce, 0x1 },
+	{ 0x81ca, 0x12 },
+	{ 0x85ca, 0x12 },
+	{ 0x81ca, 0x41 },
+	{ 0x85ca, 0x41 },
+	{ 0x89cc, 0x1 },
+	{ 0x8dcc, 0x1 },
+	{ 0x89ce, 0x0 },
+	{ 0x8dce, 0x0 },
+	{ 0x89ca, 0x19 },
+	{ 0x8dca, 0x19 },
+	{ 0x128, 0x4 },
+	{ 0x1a8, 0x4 },
+	{ 0x348, 0x509 },
+	{ 0x388, 0x509 },
+	{ 0x34a, 0xf00 },
+	{ 0x38a, 0xf00 },
+	{ 0x34c, 0xf08 },
+	{ 0x38c, 0xf08 },
+	{ 0x120, 0x180 },
+	{ 0x1a0, 0x19f },
+	{ 0x122, 0x9d8a },
+	{ 0x1a2, 0x6276 },
+	{ 0x124, 0x2 },
+	{ 0x1a4, 0x2 },
+	{ 0x126, 0x102 },
+	{ 0x1a6, 0x116 },
+	{ 0x340, 0x2 },
+	{ 0x380, 0x2 },
+	{ 0x130, 0x1 },
+	{ 0x1b0, 0x1 },
+	{ 0x132, 0x45f },
+	{ 0x1b2, 0x4c4 },
+	{ 0x134, 0x6b },
+	{ 0x1b4, 0x6a },
+	{ 0x136, 0x4 },
+	{ 0x1b6, 0x4 },
+	{ 0x108, 0x104 },
+	{ 0x188, 0x104 },
+	{ 0x10a, 0x5 },
+	{ 0x18a, 0x5 },
+	{ 0x10c, 0x337 },
+	{ 0x18c, 0x337 },
+	{ 0x110, 0x335 },
+	{ 0x190, 0x335 },
+	{ 0x104, 0x3 },
+	{ 0x184, 0x3 },
+	{ 0x138, 0xcf },
+	{ 0x1b8, 0xcf },
+	{ 0x13c, 0xce },
+	{ 0x1bc, 0xce },
+	{ 0x13e, 0x5 },
+	{ 0x1be, 0x5 },
+	{ 0x18020, 0x5100 },
+	{ 0x18022, 0x100 },
+	{ 0x18022, 0x10f },
+	{ 0x18030, 0xa0a },
+	{ 0x18034, 0x1008 },
+	{ 0x18036, 0x10 },
+	{ 0x82, 0x8200 },
+	{ 0x8e, 0x8200 },
+	{ 0x8e00, 0xff },
+	{ 0x8e02, 0x4af },
+	{ 0x8e04, 0x4ae },
+	{ 0x8e06, 0x4ae },
+	{ 0x10800, 0x91d },
+	{ 0x10802, 0x91d },
+	{ 0x10804, 0x900 },
+	{ 0x10806, 0x0 },
+	{ 0x8c80, 0x2a84 },
+	{ 0x8c9a, 0x11 },
+	{ 0x10920, 0xc },
+	{ 0x10a10, 0x9 },
+	{ 0x10a92, 0xc02 },
+	{ 0x10aee, 0x6f6 },
+	{ 0x10af0, 0x4606 },
+	{ 0x89d6, 0x6 },
+	{ 0x10ae2, 0x519 },
+	{ 0x10ae4, 0x519 },
+	{ 0x10bd0, 0x1002 },
+	{ 0x10bca, 0xb98 },
+	{ 0x10bc4, 0xc01 },
+	{ 0x10bc6, 0x0 },
+	{ 0x10bea, 0x0 },
+	{ 0x10be8, 0x311 },
+	{ 0x10bfe, 0x0 },
+	{ 0x10ffe, 0x0 },
+	{ 0x10900, 0x10a },
+	{ 0x10904, 0x3 },
+	{ 0x8dd4, 0xff },
+	{ 0x89d4, 0xff },
+	{ 0x8200, 0x2ff },
+	{ 0x8202, 0x6af },
+	{ 0x8204, 0x6ae },
+	{ 0x8206, 0x6ae },
+	{ 0x10400, 0xd1d },
+	{ 0x10402, 0xd1d },
+	{ 0x10404, 0xd00 },
+	{ 0x10406, 0x500 },
+	{ 0x8080, 0x2a82 },
+	{ 0x809a, 0x14 },
+	{ 0x10520, 0x13 },
+	{ 0x10610, 0x0 },
+	{ 0x10692, 0xc02 },
+	{ 0x106ee, 0x330 },
+	{ 0x106f0, 0x300 },
+	{ 0x85d6, 0x3 },
+	{ 0x106e2, 0x19 },
+	{ 0x106e4, 0x19 },
+	{ 0x107d0, 0x1004 },
+	{ 0x107ca, 0xf9 },
+	{ 0x107c4, 0xc01 },
+	{ 0x107c6, 0x2 },
+	{ 0x107ea, 0x0 },
+	{ 0x107e8, 0x31 },
+	{ 0x107fe, 0x1 },
+	{ 0x103fe, 0x2 },
+	{ 0x10500, 0x18c },
+	{ 0x10504, 0x3 },
+	{ 0x81d4, 0xf },
+	{ 0x85d4, 0xf0 },
+	{ 0x1c006, 0x1 },
+	{ 0x206, 0x7f },
+	{ 0x216, 0x7f },
+};
+
+static void sunxi_a733_usb_init(void)
+{
+	void __iomem *ccu = (void __iomem *)0x02002000;
+	void __iomem *subsys = (void __iomem *)0x06c00000;
+	void __iomem *phy_top0 = (void __iomem *)0x06c01000;
+	void __iomem *phy_analog0 = (void __iomem *)0x06c80000;
+	u32 val;
+	int i;
+
+	/* 1. CCU Master Gates & USB2 / SerDes Clocks */
+	/* AHB Master Gate @ 0x5C0: Enable SerDes (bit 8) and USB (bit 9) */
+	val = readl(ccu + 0x05c0);
+	writel(val | BIT(8) | BIT(9), ccu + 0x05c0);
+
+	/* MBUS Master Gate @ 0x5E0: Enable SerDes (bit 28) */
+	val = readl(ccu + 0x05e0);
+	writel(val | BIT(28), ccu + 0x05e0);
+
+	/* High speed clocks & resets */
+	writel(0x00000001, ccu + 0x1b30); /* CM_USB2_CFG_REG: enable USB2 module */
+	writel(0x81000000, ccu + 0x1348); /* USB2_U2_REF_CLK */
+	writel(0x81000000, ccu + 0x1350); /* USB2_SUSPEND_CLK */
+	writel(0x81000000, ccu + 0x1354); /* USB2_MF_CLK (300MHz AXI) */
+	writel(0x00010001, ccu + 0x135c); /* USB2_BGR_REG (Reset deassert) */
+	writel(0x81000000, ccu + 0x1360); /* USB2_U3_UTMI_CLK */
+	writel(0x81000000, ccu + 0x1364); /* USB2_U2_PIPE_CLK (480MHz PLL) */
+
+	/* SERDES_PHY_CFG: 100MHz refclk with divisor 11 (0x8100000b) */
+	writel(0x00010001, (void *)0x02001aac); /* RST_BUS_PCIE_USB3 */
+	writel(0x81000000, ccu + 0x1348);       /* CLK_COMBPHY0 */
+	writel(0x00010001, ccu + 0x134c);       /* RST_COMBPHY0 */
+	writel(0x8100000b, ccu + 0x13c0);       /* SERDES_PHY_CFG */
+	writel(0x00010001, ccu + 0x13c4);       /* SERDES_BGR */
+
+	/* 2. Subsystem Bus Gating & Routing */
+	writel(0x00330033, subsys + 0x0008); /* SUBSYS_USB3P1_BGR */
+	writel(0x20000002, subsys + 0x00f0); /* SUBSYS_DBG_CTL */
+	writel(0x00000000, subsys + 0x6100); /* PIPE CLK MAP -> Combo 0 */
+	writel(0x00000000, subsys + 0x6104); /* PIPE RXD MAP -> Combo 0 */
+	writel(0x00003210, subsys + 0x6c24); /* TOP_PIPE_MAP */
+	writel(0x00000000, subsys + 0x6c40); /* TOP_PIPE_SEL0 -> Combo 0 to USB3 */
+	writel(0x00000ff1, subsys + 0x6004); /* TOP_ISOLATION release */
+
+	/* 3. Program Cadence Combo PHY 0 (Blue Type-A USB3 SerDes) */
+	/* Clear IDDQ */
+	val = readl(phy_top0 + 0x0008);
+	val &= ~(BIT(1) | BIT(0));
+	writel(val, phy_top0 + 0x0008);
+
+	/* Set Refclk mode */
+	writel(0x11100001, phy_top0 + 0x0004);
+
+	/* Write analog SerDes registers */
+	for (i = 0; i < ARRAY_SIZE(cphy_regs); i++)
+		writew(cphy_regs[i].val, phy_analog0 + cphy_regs[i].off);
+
+	/* PHY Reset Toggle */
+	val = readl(phy_top0 + 0x0000);
+	val &= ~BIT(0);
+	writel(val, phy_top0 + 0x0000);
+	mdelay(1);
+	val |= BIT(0) | BIT(4); /* PHY0_RESET_N | PHY0_PIPE_LINK_RESET_N_SOFT */
+	writel(val, phy_top0 + 0x0000);
+
+	/* Enable PLL */
+	val = readl(phy_top0 + 0x000c);
+	val |= BIT(0); /* PHY0_PMA_XCVR_PLLCLK_EN_LN */
+	writel(val, phy_top0 + 0x000c);
+
+	/* Power State Req LN(1) */
+	val = readl(phy_top0 + 0x000c);
+	val |= (1 << 4);
+	writel(val, phy_top0 + 0x000c);
+
+	/* DP link reset soft */
+	val = readl(phy_top0 + 0x0000);
+	val |= BIT(8);
+	writel(val, phy_top0 + 0x0000);
+
+	/* PMA Fixup: 0xC008 << 1 = 0x18010 */
+	val = readw(phy_analog0 + 0x18010);
+	val &= ~(0xF << 8);
+	writew(val, phy_analog0 + 0x18010);
+
+	/* Poll for PMA_CMN_READY (0x06c01900 BIT(0)) */
+	for (i = 0; i < 1000; i++) {
+		if (readl(phy_top0 + 0x0900) & BIT(0))
+			break;
+		udelay(10);
+	}
+
+	/* DWC3 LLUCTL: Invert Sync Header for Cadence Combo SerDes */
+	writel(0x408b8080, (void *)0x06a0d024);
+
+	/* 4. Enable 5V USB VBUS power (PB7 = LOW for active-low USB1 VBUS, PB8 = HIGH, PD20 = HIGH) */
+	/* Bank B (PB7): Base 0x02000100, CFG0 @ 0x02000100 bit 28 = 1 (output), DAT @ 0x02000110 bit 7 = 0 (low) */
+	clrsetbits_le32((void *)0x02000100, 0xf0000000, 0x10000000);
+	clrbits_le32((void *)0x02000110, BIT(7));
+
+	/* Bank B (PB8): CFG1 @ 0x02000104 bit 0 = 1 (output), DAT @ 0x02000110 bit 8 = 1 (high) */
+	clrsetbits_le32((void *)0x02000104, 0x0000000f, 0x00000001);
+	setbits_le32((void *)0x02000110, BIT(8));
+
+	/* Bank D (PD20): Base 0x02000200, CFG2 @ 0x02000208 bit 16 = 1 (output), DAT @ 0x02000210 bit 20 = 1 (high) */
+	clrsetbits_le32((void *)0x02000208, 0x000f0000, 0x00010000);
+	setbits_le32((void *)0x02000210, BIT(20));
+	mdelay(100);
+}
+#endif
+
 /* called only from U-Boot proper */
 int board_init(void)
 {
@@ -228,6 +516,10 @@ int board_init(void)
 	ret = axp_gpio_init();
 	if (ret)
 		return ret;
+
+#if defined(CONFIG_MACH_SUN60I_A733)
+	sunxi_a733_usb_init();
+#endif
 
 	eth_init_board();
 
@@ -273,14 +565,28 @@ int dram_init(void)
 {
 	struct boot_file_head *spl = get_spl_header(SPL_DRAM_HEADER_VERSION);
 
-	if (spl == INVALID_SPL_HEADER)
-		gd->ram_size = get_ram_size((long *)PHYS_SDRAM_0,
-					    PHYS_SDRAM_0_SIZE);
-	else
+	if (spl != INVALID_SPL_HEADER && spl->dram_size) {
 		gd->ram_size = (phys_addr_t)spl->dram_size << 20;
+#if defined(CONFIG_MACH_SUN60I_A733)
+	} else if (IS_ENABLED(CONFIG_MACH_SUN60I_A733)) {
+		const u32 *boot_data = (const u32 *)CONFIG_TEXT_BASE;
+		u32 dram_scan_size = boot_data[0x4f8 / 4];
+
+		if (dram_scan_size >= 512 && dram_scan_size <= 32768)
+			gd->ram_size = (phys_addr_t)dram_scan_size << 20;
+		else
+			gd->ram_size = get_ram_size((long *)PHYS_SDRAM_0, PHYS_SDRAM_0_SIZE);
+#endif
+	} else {
+		gd->ram_size = get_ram_size((long *)PHYS_SDRAM_0, PHYS_SDRAM_0_SIZE);
+	}
 
 	if (gd->ram_size > CONFIG_SUNXI_DRAM_MAX_SIZE)
 		gd->ram_size = CONFIG_SUNXI_DRAM_MAX_SIZE;
+
+#if defined(CONFIG_MACH_SUN60I_A733)
+	gd->flags |= GD_FLG_SKIP_RELOC;
+#endif
 
 	return 0;
 }

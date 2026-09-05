@@ -11,13 +11,16 @@
 #include <dm.h>
 #include <dm/device_compat.h>
 #include <dm/pinctrl.h>
+#include <env.h>
 #include <errno.h>
 #include <eth_phy.h>
 #include <linux/delay.h>
 #include <malloc.h>
 #include <net.h>
+#include <net-common.h>
 #include <reset.h>
 #include <syscon.h>
+#include <u-boot/crc.h>
 
 #include "dwc_eth_qos.h"
 
@@ -86,9 +89,10 @@ static int eqos_probe_resources_sunxi(struct udevice *dev)
 	pinctrl_select_state(dev, "default");
 
 	/* Configure Port H (PH0..PH15) pinmux to function 5 (GMAC0) and pull-up */
-	writel(0x55555555, (void __iomem *)(SUNXI_PIO_BASE + 0x400));
-	writel(0x55555555, (void __iomem *)(SUNXI_PIO_BASE + 0x404));
-	writel(0x55555555, (void __iomem *)(SUNXI_PIO_BASE + 0x430));
+	void __iomem *ph_base = (void __iomem *)(SUNXI_PIO_BASE + 0x400);
+	writel(0x55555555, ph_base + 0x00);
+	writel(0x55555555, ph_base + 0x04);
+	writel(0x55555555, ph_base + 0x30);
 
 	/* Pulse PHY reset on PH16 (PH_CFG2 bit 0..3 = 1 output, PH_DATA bit 16) */
 	clrsetbits_le32(ph_base + 0x08, 0xf, 0x1);
@@ -177,7 +181,5 @@ struct eqos_config eqos_sunxi_config = {
 	.config_mac_mdio = EQOS_MAC_MDIO_ADDRESS_CR_250_300,
 	.axi_bus_width = EQOS_AXI_WIDTH_64,
 	.interface = eqos_get_interface_sunxi,
-	.ops = &eqos_sunxi_ops
-};
-	.ops = &eqos_sunxi_ops
+	.ops = &eqos_sunxi_ops,
 };

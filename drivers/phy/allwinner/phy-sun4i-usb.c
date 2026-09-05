@@ -113,9 +113,39 @@ static void sun4i_usb_phy_write(struct phy *phy, u32 addr, u32 data, int len)
 	void __iomem *phyctl = phy_data->base + phy_data->cfg->phyctl_offset;
 	int i;
 
+	if (phy_data->cfg->siddq_in_base) {
+		phyctl += phy->id * 8;
+		usbc_bit = BIT(0);
+	}
+
 	if (phy_data->cfg->phyctl_offset == REG_PHYCTL_A33) {
-		/* SoCs newer than A33 need us to set phyctl to 0 explicitly */
-		writel(0, phyctl);
+		/* A33 needs to be written in 16-bit cycles */
+		for (i = 0; i < len; i++) {
+			u8 temp8;
+
+			temp8 = readb(phyctl + 1);
+			temp8 &= ~0x0f;
+			temp8 |= (addr >> 4) & 0x0f;
+			writeb(temp8, phyctl + 1);
+
+			temp8 = readb(phyctl);
+			temp8 &= ~0x1f;
+			temp8 |= (addr & 0x0f) << 1;
+			temp8 |= (data & 0x01) ? 0x01 : 0x00;
+			writeb(temp8, phyctl);
+
+			temp8 = readb(phyctl);
+			temp8 |= 0x10;
+			writeb(temp8, phyctl);
+
+			temp8 = readb(phyctl);
+			temp8 &= ~0x10;
+			writeb(temp8, phyctl);
+
+			addr++;
+			data >>= 1;
+		}
+		return;
 	}
 
 	for (i = 0; i < len; i++) {
@@ -160,7 +190,7 @@ static void sun4i_usb_phy_passby(struct phy *phy, bool enable)
 		return;
 
 	bits = SUNXI_AHB_ICHR8_EN | SUNXI_AHB_INCR4_BURST_EN |
-		SUNXI_AHB_INCRX_ALIGN_EN | SUNXI_ULPI_BYPASS_EN;
+		SUNXI_AHB_INCRX_ALIGN_EN | SUNXI_ULPI_BYPASS_EN | BIT(1) | BIT(2);
 
 	/* A83T USB2 is HSIC */
 	if (data->cfg->hsic_index && usb_phy->id == data->cfg->hsic_index)
@@ -170,7 +200,7 @@ static void sun4i_usb_phy_passby(struct phy *phy, bool enable)
 	reg_value = readl(usb_phy->pmu);
 
 	if (enable)
-		reg_value |= bits;
+		reg_value = (reg_value | bits) & ~(BIT(31) | BIT(3));
 	else
 		reg_value &= ~bits;
 
@@ -292,12 +322,11 @@ static int sun4i_usb_phy_init(struct phy *phy)
 	}
 
 	if (data->cfg->siddq_in_base) {
-		if (phy->id == 0) {
-			val = readl(data->base + data->cfg->phyctl_offset);
-			val |= PHY_CTL_VBUSVLDEXT;
-			val &= ~PHY_CTL_SIDDQ;
-			writel(val, data->base + data->cfg->phyctl_offset);
-		}
+		void __iomem *phyctl = data->base + data->cfg->phyctl_offset + phy->id * 8;
+		val = readl(phyctl);
+		val |= PHY_CTL_VBUSVLDEXT;
+		val &= ~PHY_CTL_SIDDQ;
+		writel(val, phyctl);
 	} else {
 		if (usb_phy->id == 0)
 			sun4i_usb_phy_write(phy, PHY_RES45_CAL_EN,
@@ -339,13 +368,9 @@ static int sun4i_usb_phy_exit(struct phy *phy)
 	struct sun4i_usb_phy_plat *usb_phy = &data->usb_phy[phy->id];
 	int ret;
 
-	if (phy->id == 0) {
-		if (data->cfg->siddq_in_base) {
-			void __iomem *phyctl = data->base +
-				data->cfg->phyctl_offset;
-
-			writel(readl(phyctl) | PHY_CTL_SIDDQ, phyctl);
-		}
+	if (data->cfg->siddq_in_base) {
+		void __iomem *phyctl = data->base + data->cfg->phyctl_offset + phy->id * 8;
+		writel(readl(phyctl) | PHY_CTL_SIDDQ, phyctl);
 	}
 
 	sun4i_usb_phy_passby(phy, false);
@@ -394,7 +419,7 @@ int sun4i_usb_phy_vbus_detect(struct phy *phy)
 {
 	struct sun4i_usb_phy_data *data = dev_get_priv(phy->dev);
 	struct sun4i_usb_phy_plat *usb_phy = &data->usb_phy[phy->id];
-	int err = 1, retries = 3;
+	int err = 0, retries = 3;
 
 	if (dm_gpio_is_valid(&usb_phy->gpio_vbus_det)) {
 		err = dm_gpio_get_value(&usb_phy->gpio_vbus_det);
@@ -657,6 +682,16 @@ static const struct sun4i_usb_phy_cfg suniv_f1c100s_cfg = {
 	.dedicated_clocks = true,
 };
 
+static const struct sun4i_usb_phy_cfg sun55i_a523_cfg = {
+	.num_phys = 2,
+	.disc_thresh = 3,
+	.phyctl_offset = REG_PHYCTL_A33,
+	.dedicated_clocks = true,
+	.hci_phy_ctl_clear = PHY_CTL_SIDDQ,
+	.phy0_dual_route = true,
+	.siddq_in_base = true,
+};
+
 static const struct udevice_id sun4i_usb_phy_ids[] = {
 	{ .compatible = "allwinner,sun4i-a10-usb-phy", .data = (ulong)&sun4i_a10_cfg },
 	{ .compatible = "allwinner,sun5i-a13-usb-phy", .data = (ulong)&sun5i_a13_cfg },
@@ -669,6 +704,8 @@ static const struct udevice_id sun4i_usb_phy_ids[] = {
 	{ .compatible = "allwinner,sun8i-r40-usb-phy", .data = (ulong)&sun8i_r40_cfg },
 	{ .compatible = "allwinner,sun8i-v3s-usb-phy", .data = (ulong)&sun8i_v3s_cfg },
 	{ .compatible = "allwinner,sun20i-d1-usb-phy", .data = (ulong)&sun20i_d1_cfg },
+	{ .compatible = "allwinner,sun55i-a523-usb-phy", .data = (ulong)&sun55i_a523_cfg },
+	{ .compatible = "allwinner,sun60i-a733-usb-phy", .data = (ulong)&sun55i_a523_cfg },
 	{ .compatible = "allwinner,sun50i-a64-usb-phy", .data = (ulong)&sun50i_a64_cfg},
 	{ .compatible = "allwinner,sun50i-h6-usb-phy", .data = (ulong)&sun50i_h6_cfg},
 	{ .compatible = "allwinner,sun50i-h616-usb-phy", .data = (ulong)&sun50i_h616_cfg },
