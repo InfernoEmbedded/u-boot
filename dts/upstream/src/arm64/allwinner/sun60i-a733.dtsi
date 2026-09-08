@@ -376,5 +376,17 @@
 			max-link-speed = <3>;
 			status = "disabled";
 		};
+
+		gpadc: adc@2521000 {
+			compatible = "allwinner,sun60i-a733-gpadc",
+				     "allwinner,sun55i-a523-gpadc",
+				     "allwinner,sun20i-d1-gpadc";
+			reg = <0x02521000 0x400>;
+			interrupts = <GIC_SPI 38 IRQ_TYPE_LEVEL_HIGH>;
+			clocks = <&ccu CLK_GPADC0>;
+			resets = <&ccu RST_BUS_GPADC0>;
+			#io-channel-cells = <1>;
+			status = "disabled";
+		};
 	};
 };
