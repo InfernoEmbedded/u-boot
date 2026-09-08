@@ -50,6 +50,12 @@
 #include <spl.h>
 #include <sy8106a.h>
 #include <asm/setup.h>
+#if CONFIG_IS_ENABLED(DM_REGULATOR)
+#include <power/regulator.h>
+#endif
+#if CONFIG_IS_ENABLED(DM_THERMAL)
+#include <thermal.h>
+#endif
 
 DECLARE_GLOBAL_DATA_PTR;
 
@@ -1207,10 +1213,46 @@ int misc_init_r(void)
 	return 0;
 }
 
+#include <linux/arm-smccc.h>
+
 int board_late_init(void)
 {
 #ifdef CONFIG_USB_ETHER
 	usb_ether_init();
+#endif
+
+#if defined(CONFIG_MACH_SUN60I_A733)
+	/* Unlock Non-Secure access to CCMU clock registers and SPC ports */
+	struct arm_smccc_res smc_res;
+	int spc_idx;
+
+	/* CCMU_SEC_SWITCH_REG: unlock MBUS, BUS, PLL clock registers */
+	arm_smccc_smc(0xC000FF06, 0x02003F00, 0x00000007, 0, 0, 0, 0, 0, &smc_res);
+
+	/* SPC_SETTING_REGs: enable non-secure access to all 24 master ports */
+	for (spc_idx = 0; spc_idx <= 0x5C; spc_idx += 4)
+		arm_smccc_smc(0xC000FF06, 0x02054000 + spc_idx, 0xFFFFFFFF, 0, 0, 0, 0, 0, &smc_res);
+
+#if CONFIG_IS_ENABLED(DM_REGULATOR)
+	/* Ensure all critical PMIC rails are active */
+	struct udevice *reg;
+	regulator_autoset_by_name("vcc-pk", &reg);
+	regulator_autoset_by_name("vcc-pj", &reg);
+	regulator_autoset_by_name("vcc-1v8-audio", &reg);
+	regulator_autoset_by_name("vcc-ephy", &reg);
+	regulator_autoset_by_name("vcc-gmac-io", &reg);
+#endif
+
+#if CONFIG_IS_ENABLED(DM_THERMAL)
+	/* Read and display CPU temperature */
+	struct udevice *thermal_dev;
+	int temp;
+
+	if (!uclass_first_device_err(UCLASS_THERMAL, &thermal_dev)) {
+		if (!thermal_get_temp(thermal_dev, &temp))
+			printf("CPU Temperature: %d C\n", temp);
+	}
+#endif
 #endif
 
 	return 0;
