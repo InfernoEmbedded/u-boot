@@ -387,5 +387,17 @@
 			status = "disabled";
 		};
 
+		ths: thermal-sensor@2522000 {
+			compatible = "allwinner,sun60i-a733-ths",
+				     "allwinner,sun50i-h616-ths";
+			reg = <0x02522000 0x500>;
+			interrupts = <GIC_SPI 40 IRQ_TYPE_LEVEL_HIGH>;
+			clocks = <&ccu CLK_THS0>, <&ccu CLK_GPADC0_24M>;
+			clock-names = "bus", "gpadc";
+			resets = <&ccu RST_BUS_THS0>;
+			#thermal-sensor-cells = <1>;
+			status = "disabled";
+		};
+
 	};
 };
