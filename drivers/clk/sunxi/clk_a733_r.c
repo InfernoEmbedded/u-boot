@@ -21,6 +21,8 @@ static struct ccu_clk_gate a733_r_gates[] = {
 	[CLK_R_TWI1]		= GATE(0x19c, BIT(1)),
 	[CLK_R_UART0]		= GATE(0x18c, BIT(0)),
 	[CLK_R_SPI]		= GATE(0x1ac, BIT(0)),
+	[CLK_R_BUS_PWM]		= GATE(0x13c, BIT(0)),
+	[CLK_R_PWM]		= GATE(0x130, BIT(31)),
 };
 
 static struct ccu_reset a733_r_resets[] = {
@@ -28,6 +30,7 @@ static struct ccu_reset a733_r_resets[] = {
 	[RST_BUS_R_TWI1]	= RESET(0x19c, BIT(17)),
 	[RST_BUS_R_UART0]	= RESET(0x18c, BIT(16)),
 	[RST_BUS_R_SPI]		= RESET(0x1ac, BIT(16)),
+	[RST_BUS_R_PWM]		= RESET(0x13c, BIT(16)),
 };
 
 const struct ccu_desc a733_r_ccu_desc = {

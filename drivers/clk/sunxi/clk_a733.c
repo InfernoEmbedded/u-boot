@@ -55,6 +55,12 @@ static struct ccu_clk_gate a733_gates[] = {
 	[CLK_USB0_DEVICE]	= GATE(0x2304, BIT(8)),
 	[CLK_USB1]		= GATE(0x230c, BIT(0)),
 	[CLK_USB1_EHCI]		= GATE(0x230c, BIT(4)),
+	[CLK_GPADC0_24M]	= GATE(0x0fc0, BIT(31)),
+	[CLK_GPADC0]		= GATE(0x0fc4, BIT(0)),
+	[CLK_THS0]		= GATE(0x0fe4, BIT(0)),
+	[CLK_LRADC]		= GATE(0x1024, BIT(0)),
+	[CLK_CE]		= GATE(0x0ac0, BIT(31)),
+	[CLK_BUS_CE]		= GATE(0x0ac4, BIT(0)),
 };
 
 static struct ccu_reset a733_resets[] = {
@@ -77,6 +83,11 @@ static struct ccu_reset a733_resets[] = {
 
 	[RST_BUS_SPI0]		= RESET(0x0f04, BIT(16)),
 	[RST_BUS_SPI1]		= RESET(0x0f0c, BIT(16)),
+
+	[RST_BUS_CE]		= RESET(0x0ac4, BIT(16)),
+	[RST_BUS_GPADC0]	= RESET(0x0fc4, BIT(16)),
+	[RST_BUS_THS0]		= RESET(0x0fe4, BIT(16)),
+	[RST_BUS_LRADC]		= RESET(0x1024, BIT(16)),
 
 	[RST_BUS_GMAC0]		= RESET(0x141c, BIT(16)),
 	[RST_BUS_GMAC1]		= RESET(0x142c, BIT(16)),
