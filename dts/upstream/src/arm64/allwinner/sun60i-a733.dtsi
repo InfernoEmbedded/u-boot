@@ -154,6 +154,14 @@
 				allwinner,pinmux = <2>;
 				function = "uart0";
 			};
+
+			spi0_pc_pins: spi0-pc-pins {
+				pins = "PC2", "PC3", "PC4", "PC12";
+				allwinner,pinmux = <5>;
+				function = "spi0";
+				drive-strength = <30>;
+				bias-pull-up;
+			};
 		};
 
 		ccu: clock-controller@2002000 {
@@ -409,6 +417,19 @@
 			interrupts = <GIC_SPI 37 IRQ_TYPE_LEVEL_HIGH>;
 			clocks = <&ccu CLK_LRADC>;
 			resets = <&ccu RST_BUS_LRADC>;
+			status = "disabled";
+		};
+
+		spi0: spi@2540000 {
+			compatible = "allwinner,sun60i-a733-spi",
+				     "allwinner,sun50i-r329-spi";
+			reg = <0x02540000 0x1000>;
+			interrupts = <GIC_SPI 26 IRQ_TYPE_LEVEL_HIGH>;
+			clocks = <&ccu CLK_BUS_SPI0>, <&ccu CLK_SPI0>;
+			clock-names = "ahb", "mod";
+			resets = <&ccu RST_BUS_SPI0>;
+			#address-cells = <1>;
+			#size-cells = <0>;
 			status = "disabled";
 		};
 	};

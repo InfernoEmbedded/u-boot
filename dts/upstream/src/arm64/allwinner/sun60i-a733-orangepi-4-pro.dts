@@ -163,3 +163,15 @@
 	reset-gpios = <&pio 3 22 GPIO_ACTIVE_HIGH>;
 	wake-gpios = <&pio 3 21 GPIO_ACTIVE_HIGH>;
 };
+
+&spi0 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&spi0_pc_pins>;
+	status = "okay";
+
+	flash@0 {
+		compatible = "jedec,spi-nor";
+		reg = <0>;
+		spi-max-frequency = <50000000>;
+	};
+};
