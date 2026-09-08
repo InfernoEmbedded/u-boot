@@ -81,3 +81,12 @@ config ADC_IMX93
 	  It provides:
 	  - 4 analog input channels
 	  - 12-bit resolution
+
+config ADC_SUN20I
+	bool "Allwinner GPADC driver"
+	depends on ADC && ARCH_SUNXI
+	help
+	  Enable support for the Allwinner 12-bit General Purpose ADC (GPADC)
+	  found on D1, T113-S3, A523, A733 and newer SoCs. It provides up to
+	  8 analog input channels with 12-bit resolution.
+
