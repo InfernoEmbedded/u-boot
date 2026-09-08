@@ -48,4 +48,12 @@ config BUTTON_QCOM_PMIC
 	  on Qualcomm SoCs. These will be configured as the Enter and Down keys
 	  respectively, allowing navigation of bootmenu with buttons on device.
 
+config BUTTON_SUNXI_LRADC
+	bool "Allwinner LRADC Keys"
+	depends on BUTTON
+	help
+	  Enable support for buttons connected to the Allwinner Low Resolution
+	  ADC (LRADC), typically used for Recovery / Volume keys.
+
 endmenu
+
