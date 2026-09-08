@@ -24,5 +24,6 @@ obj-$(CONFIG_PWM_SIFIVE)	+= pwm-sifive.o
 obj-$(CONFIG_PWM_TEGRA)		+= tegra_pwm.o
 obj-$(CONFIG_PWM_STM32)		+= pwm-stm32.o
 obj-$(CONFIG_PWM_SUNXI)		+= sunxi_pwm.o
+obj-$(CONFIG_PWM_SUN50I)	+= sun50i_pwm.o
 obj-$(CONFIG_PWM_TI_EHRPWM)	+= pwm-ti-ehrpwm.o
 obj-$(CONFIG_PWM_TI_ECAP)	+= pwm-tiecap.o
