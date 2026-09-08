@@ -154,6 +154,14 @@
 				allwinner,pinmux = <2>;
 				function = "uart0";
 			};
+
+			spi0_pc_pins: spi0-pc-pins {
+				pins = "PC2", "PC3", "PC4", "PC12";
+				allwinner,pinmux = <5>;
+				function = "spi0";
+				drive-strength = <30>;
+				bias-pull-up;
+			};
 		};
 
 		ccu: clock-controller@2002000 {
@@ -237,9 +245,9 @@
 			};
 		};
 
-		r_pio: pinctrl@7022000 {
+		r_pio: pinctrl@7025000 {
 			compatible = "allwinner,sun60i-a733-r-pinctrl";
-			reg = <0x07022000 0x400>;
+			reg = <0x07025000 0x400>;
 			clocks = <&osc24M>;
 			gpio-controller;
 			#gpio-cells = <3>;
@@ -263,9 +271,9 @@
 			#reset-cells = <1>;
 		};
 
-		r_i2c0: i2c@7081400 {
+		r_i2c0: i2c@7083000 {
 			compatible = "allwinner,sun50i-a64-i2c", "allwinner,sun6i-a31-i2c";
-			reg = <0x07081400 0x400>;
+			reg = <0x07083000 0x400>;
 			interrupts = <GIC_SPI 127 IRQ_TYPE_LEVEL_HIGH>;
 			clocks = <&r_ccu CLK_R_TWI0>;
 			resets = <&r_ccu RST_BUS_R_TWI0>;

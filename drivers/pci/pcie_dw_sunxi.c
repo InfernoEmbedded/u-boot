@@ -112,18 +112,25 @@ static int sunxi_pcie_hw_init(struct sunxi_pcie *priv)
 		dm_gpio_set_value(&priv->wake_gpio, 1);
 	}
 
+	/* Assert PERST# LOW during PHY clock / PLL initialization */
+	if (dm_gpio_is_valid(&priv->rst_gpio)) {
+		dm_gpio_set_value(&priv->rst_gpio, 0);
+	}
+
+	/* Ensure PD20 is muxed to Function 6 (PCIE-CLKREQN) */
+	clrsetbits_le32((void __iomem *)0x02000208, 0x000f0000, 0x00060000);
+
 	/* 2. Configure RTC DCXO clock feed to Combo PHY */
-	val = readl((void __iomem *)SUNXI_RTC_XO_CTRL1);
-	writel(val | BIT(5) | BIT(4), (void __iomem *)SUNXI_RTC_XO_CTRL1);
+	writel(0x00000530, (void __iomem *)SUNXI_RTC_XO_CTRL1);
 
 	/* 3. Configure CCU Clocks & Resets */
 	ccu = (void __iomem *)SUNXI_CCU_BASE;
 	writel(0x80000000, ccu + 0x1380); /* PCIE0_AUX Clock */
 	writel(0x82000000, ccu + 0x1384); /* PCIE0_AXI_SLV Clock (400MHz) */
 	writel(0x00030003, ccu + 0x138c); /* PCIE0 Bus Gating Reset */
-	writel(0x80000000, ccu + 0x13c0); /* SERDES_PHY_CFG Clock */
+	writel(0x81000005, ccu + 0x13c0); /* SERDES_PHY_CFG Clock: PERI0_600M / 6 = 100MHz */
 	writel(0x00010001, ccu + 0x13c4); /* SERDES_PHY_BGR */
-	writel(0x00000001, ccu + 0x1b28); /* CM PCIE0 Mode */
+	writel(0x00020001, ccu + 0x1b28); /* CM PCIE0 Mode */
 	writel(0x00010002, ccu + 0x0574); /* MBUS/NSI */
 	writel(0xc3000000, ccu + 0x0580);
 	writel(0x00010001, ccu + 0x0584);
@@ -136,11 +143,11 @@ static int sunxi_pcie_hw_init(struct sunxi_pcie *priv)
 	/* 4. Configure SerDes Subsystem */
 	subsys = (void __iomem *)SUNXI_SERDES_SUBSYS_BASE;
 	writel(0x00070003, subsys + 0x0004); /* SUBSYS_PCIE_BGR */
-	writel(0x00000002, subsys + 0x0008); /* SUBSYS_COMB1_PIPE = PCIe */
+	writel(0x00330033, subsys + 0x0008); /* SUBSYS_USB3P1_BGR */
 	writel(0x00000001, subsys + 0x0010);
 	writel(0x00000001, subsys + 0x0020); /* SUBSYS_PCIE_APP_SUB_CTRL */
 	writel(0x20000400, subsys + 0x00f0);
-	writel(0x00000001, subsys + 0x6c44);
+	writel(0x00000001, subsys + 0x6c44); /* SUBSYS_COMB1_PIPE = 1 (PCIe) */
 	writel(0x00000345, subsys + 0x0220); /* SUBSYS_PCIE_ITS_TAGT_ADDR */
 	writel(0x00ff00ff, subsys + 0x0300); /* SUBSYS_AXI2TO1_TH: 16 burst */
 	writel(0x00ff00ff, (void __iomem *)0x08868020);
@@ -168,9 +175,9 @@ static int sunxi_pcie_hw_init(struct sunxi_pcie *priv)
 	writel(0x00000002, phy_analog + 0x00a8);
 	writel(0x00000002, phy_analog + 0x00d8);
 
-	/* Top assert */
-	writel(readl(phy_top + 0x0000) | 0x1, phy_top + 0x0000);
-	writel(readl(phy_top + 0x0100) | 0x1, phy_top + 0x0100);
+	/* Deassert link & lane 0 reset, ensuring Lane 0 Mode is PCIe (bits[5:4]=00) */
+	writel(0x00000001, phy_top + 0x0000);
+	writel(0x00000001, phy_top + 0x0100);
 
 	/* Poll for Combo PHY 1 PLL lock (0x0900 & 0x1) */
 	ret = readl_poll_timeout(phy_top + 0x0900, val, (val & 0x1), 50000);
@@ -181,16 +188,16 @@ static int sunxi_pcie_hw_init(struct sunxi_pcie *priv)
 
 	/* Post PLL lock setup */
 	writew(0x0270, phy_analog + 0x00a0);
-	writew(0x0010, phy_analog + 0x0098);
+	writew(readw(phy_analog + 0x98) | BIT(4), phy_analog + 0x0098);
 	writew(0x0001, (void __iomem *)0x06cb8000);
 	writel(0x11100001, phy_top + 0x0004);
+	writel(0x00a023f0, priv->app_base + 0x800);
 
-	/* 7. PERST# Power-On Reset Sequence (200ms LOW, 500ms HIGH) */
+	/* 7. PERST# Deassert Sequence (20ms LOW, deassert HIGH, 100ms settling) */
 	if (dm_gpio_is_valid(&priv->rst_gpio)) {
-		dm_gpio_set_value(&priv->rst_gpio, 0);
-		mdelay(200);
+		mdelay(20);
 		dm_gpio_set_value(&priv->rst_gpio, 1);
-		mdelay(500);
+		mdelay(100);
 	}
 
 	return 0;
@@ -204,13 +211,16 @@ static int sunxi_pcie_link_up(struct sunxi_pcie *priv)
 	/* Set LTSSM Enable with RC Mode */
 	writel(PCIE_DEVICE_TYPE_RC | PCIE_LINK_TRAINING, priv->app_base + PCIE_LTSSM_CTRL);
 
-	/* Wait for SMLH & RDLH link up */
+	/* Wait for SMLH link up and L0 active */
 	ret = readl_poll_timeout(priv->app_base + PCIE_LINK_STAT, val,
-				 ((val & (SMLH_LINK_UP | RDLH_LINK_UP)) == (SMLH_LINK_UP | RDLH_LINK_UP)),
-				 100000);
+				 ((val & SMLH_LINK_UP) &&
+				  (((val & RDLH_LINK_UP)) ||
+				   ((readl(priv->dw.dbi_base + 0x728) & 0x3f) == 0x11))),
+				 300000);
 	if (ret) {
-		printf("sunxi_pcie: Link training timeout! (LINK_STAT=0x%08x)\n",
-		       readl(priv->app_base + PCIE_LINK_STAT));
+		printf("sunxi_pcie: Link training timeout! (LINK_STAT=0x%08x, DBG0=0x%08x)\n",
+		       readl(priv->app_base + PCIE_LINK_STAT),
+		       readl(priv->dw.dbi_base + 0x728));
 		return -ETIMEDOUT;
 	}
 
@@ -341,6 +351,9 @@ static int sunxi_pcie_probe(struct udevice *dev)
 	pcie_dw_setup_host(&priv->dw);
 	dw_pcie_link_set_max_link_width(&priv->dw, priv->num_lanes);
 
+	/* Clear PORT_LOGIC_SPEED_CHANGE set by pcie_dw_setup_host before link is trained */
+	clrbits_le32(priv->dw.dbi_base + PCIE_LINK_WIDTH_SPEED_CONTROL, PORT_LOGIC_SPEED_CHANGE);
+
 	/* Configure DWC Core Registers for Allwinner A733 */
 	dw_pcie_dbi_write_enable(&priv->dw, true);
 	writew(0x0604, priv->dw.dbi_base + 0x0a); /* PCI_CLASS_BRIDGE_PCI */
@@ -351,21 +364,26 @@ static int sunxi_pcie_probe(struct udevice *dev)
 	writel(0x00000000, priv->dw.dbi_base + 0x8e0); /* DWC Non-Coherent */
 	writel(0x00000000, priv->dw.dbi_base + 0x8e8);
 
-	/* Trigger and wait for speed change */
-	val = readl(priv->dw.dbi_base + PCIE_LINK_WIDTH_SPEED_CONTROL);
-	writel(val | PORT_LOGIC_SPEED_CHANGE, priv->dw.dbi_base + PCIE_LINK_WIDTH_SPEED_CONTROL);
-	for (ret = 0; ret < 200; ret++) {
-		val = readl(priv->dw.dbi_base + PCIE_LINK_WIDTH_SPEED_CONTROL);
-		if (!(val & PORT_LOGIC_SPEED_CHANGE))
-			break;
-		udelay(1000);
-	}
 	dw_pcie_dbi_write_enable(&priv->dw, false);
 
 	/* Start LTSSM Link Training and wait for SMLH & RDLH link up */
 	ret = sunxi_pcie_link_up(priv);
 	if (ret)
 		return ret;
+
+	/* Once Gen1 link is established, trigger speed change if target Gen > 1 */
+	if (priv->gen > LINK_SPEED_GEN_1) {
+		dw_pcie_dbi_write_enable(&priv->dw, true);
+		val = readl(priv->dw.dbi_base + PCIE_LINK_WIDTH_SPEED_CONTROL);
+		writel(val | PORT_LOGIC_SPEED_CHANGE, priv->dw.dbi_base + PCIE_LINK_WIDTH_SPEED_CONTROL);
+		for (ret = 0; ret < 200; ret++) {
+			val = readl(priv->dw.dbi_base + PCIE_LINK_WIDTH_SPEED_CONTROL);
+			if (!(val & PORT_LOGIC_SPEED_CHANGE))
+				break;
+			udelay(1000);
+		}
+		dw_pcie_dbi_write_enable(&priv->dw, false);
+	}
 
 	/* 1. Program Inbound DMA ATU Region 0 (0x40000000..0xFFFFFFFF -> DRAM 0x40000000) */
 	sunxi_pcie_prog_inbound_atu(priv, 0, PCIE_ATU_TYPE_MEM, 0x40000000, 0x40000000, 0xc0000000ULL);
