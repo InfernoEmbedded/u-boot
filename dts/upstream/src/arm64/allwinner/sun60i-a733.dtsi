@@ -156,9 +156,9 @@
 			};
 		};
 
-		ccu: clock-controller@2001000 {
+		ccu: clock-controller@2002000 {
 			compatible = "allwinner,sun60i-a733-ccu";
-			reg = <0x02001000 0x3000>;
+			reg = <0x02002000 0x2000>;
 			clocks = <&osc24M>;
 			clock-names = "hosc";
 			#clock-cells = <1>;
@@ -374,5 +374,6 @@
 			max-link-speed = <3>;
 			status = "disabled";
 		};
+
 	};
 };
