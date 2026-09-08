@@ -120,6 +120,15 @@ config PWM_SUNXI
 	  This PWM is found on H3, A64 and other Allwinner SoCs. It supports a
 	  programmable period and duty cycle. A 16-bit counter is used.
 
+config PWM_SUN50I
+	bool "Enable support for Allwinner Modern Enhanced PWM"
+	depends on ARCH_SUNXI
+	help
+	  This PWM controller is found on H616, A523, A733 and newer Allwinner SoCs.
+	  It features independent channels with up to 10 channels per controller,
+	  per-pair clock gating, and high-resolution period/duty cycle programming.
+
+
 config PWM_TI_EHRPWM
 	bool "Enable support for EHRPWM PWM"
 	depends on ARCH_OMAP2PLUS

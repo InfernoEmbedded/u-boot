@@ -435,5 +435,19 @@
 			status = "disabled";
 		};
 
+		s_pwm: pwm@7023000 {
+			compatible = "allwinner,sun60i-a733-pwm",
+				     "allwinner,sun55i-a523-pwm",
+				     "allwinner,sun50i-h616-pwm";
+			reg = <0x07023000 0x400>;
+			interrupts = <GIC_SPI 207 IRQ_TYPE_LEVEL_HIGH>;
+			clocks = <&r_ccu CLK_R_BUS_PWM>, <&r_ccu CLK_R_PWM>;
+			clock-names = "bus", "mod";
+			resets = <&r_ccu RST_BUS_R_PWM>;
+			pwm-number = <10>;
+			pwm-base = <20>;
+			#pwm-cells = <3>;
+			status = "disabled";
+		};
 	};
 };
