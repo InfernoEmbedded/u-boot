@@ -575,7 +575,6 @@ config MACH_SUN60I_A733
 	select DRAM_SUN60I_A733
 	select FIT
 	select SPL_LOAD_FIT if SPL
-	select LINUX_KERNEL_IMAGE_HEADER
 	imply OF_UPSTREAM
 
 endchoice

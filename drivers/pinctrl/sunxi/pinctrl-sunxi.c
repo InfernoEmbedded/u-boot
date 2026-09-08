@@ -806,7 +806,7 @@ static const struct sunxi_pinctrl_function sun60i_a733_pinctrl_functions[] = {
 	{ "mmc0",	2 },	/* PF0-PF5 */
 	{ "mmc1",	2 },	/* PG0-PG5 */
 	{ "mmc2",	3 },	/* PC0-PC16 */
-	{ "spi0",	4 },	/* PC0-PC7, PC15-PC16 */
+	{ "spi0",	5 },	/* PC0-PC7, PC12, PC15-PC16 */
 	{ "uart0",	3 },	/* PB0-PB1 */
 	{ "uart1",	2 },	/* PG6-PG7 */
 };
