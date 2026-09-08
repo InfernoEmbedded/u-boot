@@ -400,5 +400,16 @@
 			#thermal-sensor-cells = <1>;
 			status = "disabled";
 		};
+
+		lradc: lradc@2524000 {
+			compatible = "allwinner,sun60i-a733-lradc",
+				     "allwinner,sun55i-a523-lradc",
+				     "allwinner,sun50i-h616-lradc";
+			reg = <0x02524000 0x400>;
+			interrupts = <GIC_SPI 37 IRQ_TYPE_LEVEL_HIGH>;
+			clocks = <&ccu CLK_LRADC>;
+			resets = <&ccu RST_BUS_LRADC>;
+			status = "disabled";
+		};
 	};
 };
