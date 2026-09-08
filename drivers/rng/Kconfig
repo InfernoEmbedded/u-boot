@@ -133,4 +133,11 @@ config RNG_EXYNOS
 	  case the LDFW (Loadable Firmware) has to be loaded first, as it
 	  actually implements TRNG SMC calls.
 
+config RNG_SUN8I_CE
+	bool "Allwinner Crypto Engine TRNG support"
+	depends on DM_RNG && ARCH_SUNXI
+	help
+	  Enable support for True Random Number Generator (TRNG) in the
+	  Allwinner Crypto Engine (CE) on H616, A523, A733 and newer SoCs.
+
 endif
