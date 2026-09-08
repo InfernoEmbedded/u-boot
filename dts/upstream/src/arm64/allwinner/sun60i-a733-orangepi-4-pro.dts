@@ -97,6 +97,30 @@
 				regulator-min-microvolt = <3300000>;
 				regulator-max-microvolt = <3300000>;
 			};
+
+			reg_bldo1: bldo1 {
+				regulator-name = "vcc-pk";
+				regulator-min-microvolt = <1800000>;
+				regulator-max-microvolt = <1800000>;
+				regulator-always-on;
+				regulator-boot-on;
+			};
+
+			reg_bldo2: bldo2 {
+				regulator-name = "vcc-pj";
+				regulator-min-microvolt = <1800000>;
+				regulator-max-microvolt = <1800000>;
+				regulator-always-on;
+				regulator-boot-on;
+			};
+
+			reg_bldo4: bldo4 {
+				regulator-name = "vcc-1v8-audio";
+				regulator-min-microvolt = <1800000>;
+				regulator-max-microvolt = <1800000>;
+				regulator-always-on;
+				regulator-boot-on;
+			};
 		};
 	};
 };
@@ -158,3 +182,30 @@
 	reset-gpios = <&pio 3 22 GPIO_ACTIVE_HIGH>;
 	wake-gpios = <&pio 3 21 GPIO_ACTIVE_HIGH>;
 };
+
+&s_pwm {
+	status = "okay";
+};
+
+&spi0 {
+	status = "okay";
+
+	flash@0 {
+		compatible = "jedec,spi-nor";
+		reg = <0>;
+		spi-max-frequency = <50000000>;
+	};
+};
+
+&ths {
+	status = "okay";
+};
+
+&gpadc {
+	status = "okay";
+};
+
+&ce {
+	status = "okay";
+};
+
