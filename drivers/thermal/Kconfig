@@ -55,4 +55,12 @@ config TI_LM74_THERMAL
 	 Enable thermal support for the Texas Instruments LM74 chip.
 	 The driver supports reading CPU temperature.
 
+config SUN8I_THERMAL
+	bool "Allwinner THS Temperature sensor driver"
+	depends on ARCH_SUNXI
+	help
+	  Enable thermal support for the Allwinner Thermal Sensor (THS) controller
+	  found on H6, H616, A523, A733 and newer Allwinner SoCs.
+
 endif # if DM_THERMAL
+
