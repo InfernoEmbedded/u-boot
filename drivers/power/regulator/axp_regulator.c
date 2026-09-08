@@ -360,6 +360,16 @@ static const struct axp_regulator_plat axp813_regulators[] = {
 	{ }
 };
 
+static const struct axp_regulator_plat axp8191_regulators[] = {
+	{ "dc1sw1", 0x11, BIT(3),   NA,   NA,   NA,   NA,  NA, NA },
+	{ "dc1sw2", 0x11, BIT(4),   NA,   NA,   NA,   NA,  NA, NA },
+	{ "bldo1",  0x20, BIT(6), 0x2a, 0x1f,  500, 3500, 100, NA },
+	{ "bldo2",  0x20, BIT(7), 0x2b, 0x1f,  500, 3500, 100, NA },
+	{ "bldo4",  0x21, BIT(1), 0x2d, 0x1f,  500, 3500, 100, NA },
+	{ "dldo1",  0x21, BIT(4), 0x32, 0x1f,  500, 3500, 100, NA },
+	{ }
+};
+
 static const struct axp_regulator_plat *const axp_regulators[] = {
 	[AXP152_ID]	= axp152_regulators,
 	[AXP202_ID]	= axp20x_regulators,
@@ -374,6 +384,7 @@ static const struct axp_regulator_plat *const axp_regulators[] = {
 	[AXP806_ID]	= axp806_regulators,
 	[AXP809_ID]	= axp809_regulators,
 	[AXP813_ID]	= axp813_regulators,
+	[AXP8191_ID]	= axp8191_regulators,
 };
 
 static int axp_regulator_bind(struct udevice *dev)
