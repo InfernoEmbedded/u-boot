@@ -423,5 +423,17 @@
 			status = "disabled";
 		};
 
+		ce: crypto@4603000 {
+			compatible = "allwinner,sun60i-a733-crypto",
+				     "allwinner,sun55i-a523-crypto",
+				     "allwinner,sun50i-h616-crypto";
+			reg = <0x04603000 0x1000>;
+			interrupts = <GIC_SPI 168 IRQ_TYPE_LEVEL_HIGH>;
+			clocks = <&ccu CLK_BUS_CE>, <&ccu CLK_CE>;
+			clock-names = "bus", "mod";
+			resets = <&ccu RST_BUS_CE>;
+			status = "disabled";
+		};
+
 	};
 };
