@@ -279,12 +279,12 @@ static void sunxi_plane_reset(struct drm_plane *plane)
 	ch_state->base.plane = plane;
 	ch_state->base.rotation = DRM_MODE_ROTATE_0;
 	ch_state->base.alpha = DRM_BLEND_ALPHA_OPAQUE;
-	ch_state->base.pixel_blend_mode = DRM_MODE_BLEND_PREMULTI;
+	ch_state->base.pixel_blend_mode = DRM_MODE_BLEND_PIXEL_NONE;
 	plane->state = &ch_state->base;
 
 	for (i = 0; i < MAX_LAYER_NUM_PER_CHN - 1; i++) {
 		ch_state->alpha[i] = DRM_BLEND_ALPHA_OPAQUE;
-		ch_state->pixel_blend_mode[i] = DRM_MODE_BLEND_PREMULTI;
+		ch_state->pixel_blend_mode[i] = DRM_MODE_BLEND_PIXEL_NONE;
 	}
 	ch_state->eotf = DE_EOTF_BT709;
 	ch_state->color_space = DE_COLOR_SPACE_BT709;

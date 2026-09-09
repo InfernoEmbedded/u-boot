@@ -262,15 +262,15 @@ ssize_t dw_hdmi_dump(char *buf)
 		i2cm->mode ? "fast" : "standard", i2cm->sfrClock / 100,
 		dw_i2cm_get_rate() / 10, dw_i2cm_get_rate() % 10);
 		printf("%s\n", buf);
-	memset(buf, 0x0, ARRAY_SIZE(buf));
+	buf[0] = '\0';
 	n = 0;
 	n += dw_avp_dump(buf + n);
 	printf("%s\n", buf);
-	memset(buf, 0x0, ARRAY_SIZE(buf));
+	buf[0] = '\0';
 	n = 0;
 	n += dw_phy_dump(buf + n);
 	printf("%s\n", buf);
-	memset(buf, 0x0, ARRAY_SIZE(buf));
+	buf[0] = '\0';
 	n = 0;
 	return n;
 }

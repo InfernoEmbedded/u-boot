@@ -113,7 +113,7 @@ s32 tcon_tv_close(struct sunxi_tcon_tv *tcon)
 s32 tcon_tv_cfg(struct sunxi_tcon_tv *tcon, struct disp_video_timings *timing)
 {
 	u32 start_delay;
-#if (IS_ENABLED(CONFIG_MACH_SUN60IW2)) || (IS_ENABLED(CONFIG_MACH_SUN65IW1))
+#if (IS_ENABLED(CONFIG_MACH_SUN60IW2)) || (IS_ENABLED(CONFIG_MACH_SUN65IW1)) || (IS_ENABLED(CONFIG_MACH_SUN60I_A733))
 	if (timing->vic == 39) {
 		tcon->reg->tcon_tv_basic1.bits.vic39 = 0x1;
 		tcon->reg->tcon_tv_basic1.bits.vt = timing->ver_total_time;

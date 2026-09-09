@@ -833,6 +833,7 @@ static const struct udevice_id hdmi_plat_match[] = {
 	{ .compatible = "arm,sun50iw9p1", .data = (ulong)&sun50i_hdmi },
 	{ .compatible = "arm,sun55iw3p1", .data = (ulong)&sun55i_hdmi },
 	{ .compatible = "arm,sun60iw2p1", .data = (ulong)&sun60i_hdmi },
+	{ .compatible = "allwinner,sun60i-a733", .data = (ulong)&sun60i_hdmi },
 	{ },
 };
 
@@ -840,22 +841,15 @@ int sunxi_hdmi_init(struct sunxi_hdmi_s *hdmi)
 {
 	int ret = 0, i = 0;
 	ofnode root_node;
-	const char *compatible = NULL;
 
 	root_node = ofnode_path("/");
 	if (!ofnode_valid(root_node)) {
 		hdmi_err("failed to find root node\n");
 		return -1;
-    }
-
-	ret = ofnode_read_string_index(root_node, "compatible", 0x1, &compatible);
-    if (ret != 0) {
-		hdmi_err("failed to read root node compatible value\n");
-		return -1;
-    }
+	}
 
 	for (i = 0; hdmi_plat_match[i].compatible; i++) {
-		if (!strcmp(compatible, hdmi_plat_match[i].compatible)) {
+		if (ofnode_device_is_compatible(root_node, hdmi_plat_match[i].compatible)) {
 			hdmi->plat_data = (struct sunxi_hdmi_plat_s *)hdmi_plat_match[i].data;
 			break;
 		}

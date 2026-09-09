@@ -13,6 +13,7 @@
 #include <drm/drm_modes.h>
 
 #include <dm.h>
+#include <reset.h>
 #include <power/regulator.h>
 
 #include "sunxi_device/sunxi_hdmi.h"
@@ -58,6 +59,8 @@ struct sunxi_hdmi_res_s {
 	struct clk  *clk_cec_parent;
 	struct clk  *rst_bus_sub;
 	struct clk  *rst_bus_main;
+	struct reset_ctl rst_ctl_main;
+	struct reset_ctl rst_ctl_sub;
 
 	char  power_name[SUNXI_HDMI_POWER_CNT][SUNXI_HDMI_POWER_NAME];
 	struct udevice *hdmi_regu[SUNXI_HDMI_POWER_CNT];
@@ -196,8 +199,10 @@ static int _sunxi_drv_hdmi_regulator_on(struct sunxi_drm_hdmi *hdmi)
 			continue;
 
 		ret = regulator_set_enable(hdmi->hdmi_res.hdmi_regu[loop], 0x1);
-		hdmi_trace("hdmi drv enable regulator %s %s\n",
-			hdmi->hdmi_res.power_name[loop], ret != 0 ? "failed" : "success");
+		hdmi_inf("hdmi drv enable regulator %s (dev=%s): %s\n",
+			hdmi->hdmi_res.power_name[loop],
+			hdmi->hdmi_res.hdmi_regu[loop]->name,
+			ret != 0 ? "failed" : "success");
 	}
 	return 0;
 }
@@ -211,6 +216,19 @@ static int _sunxi_drv_hdmi_clock_on(struct sunxi_drm_hdmi *hdmi)
 		hdmi_trace("hdmi drv clock has been enable\n");
 		return 0;
 	}
+
+	setbits_le32((void *)0x020036ec, BIT(0) | BIT(16)); /* VIDEO_OUT1 */
+	setbits_le32((void *)0x020036cc, BIT(0) | BIT(16)); /* DPSS_TOP1 */
+	setbits_le32((void *)0x02003604, BIT(0) | BIT(16)); /* TCON_TV0 */
+	setbits_le32((void *)0x02003684, BIT(31));          /* HDMI_TV */
+	setbits_le32((void *)0x0200368c, BIT(0) | BIT(16) | BIT(17) | BIT(18)); /* HDMI_BUS */
+	setbits_le32((void *)0x02003690, BIT(31));          /* HDMI_SFR (24M) */
+
+	if (reset_valid(&pclk->rst_ctl_main))
+		reset_deassert(&pclk->rst_ctl_main);
+
+	if (reset_valid(&pclk->rst_ctl_sub))
+		reset_deassert(&pclk->rst_ctl_sub);
 
 	if (!IS_ERR_OR_NULL(pclk->rst_bus_main)) {
 		hdmi_trace("hdmi drv main bus gating enable\n");
@@ -880,6 +898,15 @@ int _sunxi_drm_hdmi_get_modes(struct sunxi_drm_connector *conn,
 		}
 	}
 
+	if (!sel_mode->hdisplay && !list_empty(&conn->probed_modes)) {
+		mode = list_first_entry(&conn->probed_modes, struct drm_display_mode, head);
+		memcpy(sel_mode, mode, sizeof(struct drm_display_mode));
+	}
+
+	if (!sel_mode->hdisplay)
+		memcpy(sel_mode, &_sunxi_hdmi_default_modes[0],
+				sizeof(struct drm_display_mode));
+
 exit:
 	rate = drm_mode_vrefresh(sel_mode);
 	pr_err("drm hdmi get mode: %dx%d@%dHz\n",
@@ -1019,6 +1046,10 @@ int __sunxi_hdmi_init_dts(struct sunxi_drm_hdmi *hdmi)
 	if (IS_ERR_OR_NULL(pclk->clk_hdmi_bus))
 		pclk->clk_hdmi_bus = NULL;
 
+	/* parse hdmi resets */
+	reset_get_by_name(dev, "rst_main", &pclk->rst_ctl_main);
+	reset_get_by_name(dev, "rst_sub", &pclk->rst_ctl_sub);
+
 	/* parse hdmi ddc clock */
 	pclk->rst_bus_main = sunxi_clk_get(dev, "rst_main");
 	if (IS_ERR_OR_NULL(pclk->rst_bus_main))
@@ -1044,20 +1075,32 @@ int __sunxi_hdmi_init_resource(struct sunxi_drm_hdmi *hdmi)
 		ret = uclass_get_device_by_phandle(UCLASS_REGULATOR, hdmi->dev,
 				power_name, &pres->hdmi_regu[loop]);
 		if (ret) {
+			const char *str = ofnode_read_string(dev_ofnode(hdmi->dev), power_name);
+			if (str) {
+				char supply_name[48];
+				snprintf(supply_name, sizeof(supply_name), "%s-supply", str);
+				ret = uclass_get_device_by_phandle(UCLASS_REGULATOR, hdmi->dev,
+						supply_name, &pres->hdmi_regu[loop]);
+				if (ret)
+					ret = regulator_get_by_platname(str, &pres->hdmi_regu[loop]);
+			}
+		}
+		if (ret) {
 			hdmi_wrn("failed to request regulator(%s): %d\n", power_name, ret);
 			continue;
 		}
 
-		hdmi_inf("hdmi drv power name: %s\n", power_name);
+		strncpy(pres->power_name[loop], power_name, sizeof(pres->power_name[loop]) - 1);
+		hdmi_inf("hdmi drv power name: %s -> %s\n", power_name, pres->hdmi_regu[loop]->name);
 	}
+
+	_sunxi_drv_hdmi_regulator_on(hdmi);
+	_sunxi_drv_hdmi_clock_on(hdmi);
 
 	if (hdmi->tcon_dev) {
 		sunxi_tcon_hdmi_open(hdmi->tcon_dev);
 		sunxi_tcon_hdmi_src(hdmi->tcon_dev, 0x0);
 	}
-
-	_sunxi_drv_hdmi_regulator_on(hdmi);
-	_sunxi_drv_hdmi_clock_on(hdmi);
 
 	mutex_init(&hdmi->hdmi_ctrl.drv_edid_lock);
 

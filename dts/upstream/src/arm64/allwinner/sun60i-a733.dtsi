@@ -460,7 +460,6 @@
 
 		sunxi_drm: sunxi-drm {
 			compatible = "allwinner,sunxi-drm";
-			bootph-all;
 			status = "disabled";
 
 			route {
@@ -475,7 +474,7 @@
 
 		de: de@5000000 {
 			compatible = "allwinner,display-engine-v352";
-			reg = <0x0 0x05000000 0x0 0x400000>;
+			reg = <0x05000000 0x400000>;
 			interrupts = <GIC_SPI 50 IRQ_TYPE_LEVEL_HIGH>,
 				     <GIC_SPI 34 IRQ_TYPE_LEVEL_HIGH>;
 			clocks = <&ccu CLK_DE0>, <&ccu CLK_BUS_DE0>;
@@ -501,18 +500,26 @@
 
 		vo1: vo1@5510000 {
 			compatible = "allwinner,tcon-top1";
-			reg = <0x0 0x05510000 0x0 0x1000>;
-			clocks = <&ccu CLK_DPSS_TOP1>;
-			clock-names = "clk_bus_dpss_top";
+			reg = <0x05510000 0x1000>;
+			clocks = <&ccu CLK_DPSS_TOP1>,
+				 <&ccu CLK_VID_OUT1_AHB_GATE>;
+			clock-names = "clk_bus_dpss_top",
+				      "clk_ahb_gate";
+			resets = <&ccu RST_BUS_DPSS_TOP1>,
+				 <&ccu RST_BUS_VIDEO_OUT1>;
+			reset-names = "rst_bus_dpss_top",
+				      "rst_bus_reg";
 			status = "disabled";
 		};
 
 		tv0: tcon3@5730000 {
 			compatible = "allwinner,tcon-tv";
-			reg = <0x0 0x05730000 0x0 0x1000>;
+			reg = <0x05730000 0x1000>;
 			interrupts = <GIC_SPI 57 IRQ_TYPE_LEVEL_HIGH>;
 			clocks = <&ccu CLK_TCONTV0>;
-			clock-names = "rst_bus_tcon";
+			clock-names = "clk_bus_tcon";
+			resets = <&ccu RST_BUS_TCONTV0>;
+			reset-names = "rst_bus_tcon";
 			top = <&vo1>;
 			status = "disabled";
 
@@ -546,15 +553,15 @@
 
 		hdmi0: hdmi0@5520000 {
 			compatible = "allwinner,sunxi-hdmi";
-			reg = <0x0 0x05520000 0x0 0x100000>;
+			reg = <0x05520000 0x100000>;
 			interrupts = <GIC_SPI 61 IRQ_TYPE_LEVEL_HIGH>;
 			clocks = <&ccu CLK_HDMI>,
-				 <&ccu CLK_HDMI_SFR>,
-				 <&ccu RST_BUS_HDMI_MAIN>,
-				 <&ccu RST_BUS_HDMI_SUB>;
+				 <&ccu CLK_HDMI_SFR>;
 			clock-names = "clk_hdmi",
-				      "clk_hdmi_24M",
-				      "rst_main",
+				      "clk_hdmi_24M";
+			resets = <&ccu RST_BUS_HDMI_MAIN>,
+				 <&ccu RST_BUS_HDMI_SUB>;
+			reset-names = "rst_main",
 				      "rst_sub";
 			status = "disabled";
 

@@ -172,6 +172,7 @@ int sunxi_drm_kernel_para_flush(void)
 }
 
 static int display_init(struct display_state *state);
+static int display_enable(struct display_state *state);
 #define SUNXI_DISPLAY_MAX_WIDTH 4096
 #define SUNXI_DISPLAY_MAX_HEIGHT 4096
 
@@ -533,6 +534,56 @@ err:
 	return 0;
 }
 
+static void sun60i_pck600_power_on_domain(u32 domain)
+{
+	void __iomem *base = (void __iomem *)(0x07060000UL + domain * 0x1000UL);
+	u32 val;
+	int timeout = 10000;
+
+	/* Configure delay registers */
+	writel(0x1f1f1f, base + 0x170);   /* PPU_DCDR0 */
+	writel(0x1f1f, base + 0x174);     /* PPU_DCDR1 */
+	writel(0x8080808, base + 0xc00);  /* logic_power_switch0_delay */
+	writel(0x808, base + 0xc04);      /* logic_power_switch1_delay */
+	writel(0x8, base + 0xc10);        /* off2on_delay */
+
+	/* Check if already powered on */
+	if ((readl(base + 0x8) & 0xf) == 0x8)
+		return;
+
+	/* Set PPU_PWPR bit [3:0] = 0x8 (PPU_POWER_MODE_ON) */
+	val = readl(base + 0x0);
+	val = (val & ~0xf) | 0x8;
+	writel(val, base + 0x0);
+	readl(base + 0x0); /* push write out */
+
+	/* Wait for PPU_PWSR bit [3:0] == 0x8 */
+	while (((readl(base + 0x8) & 0xf) != 0x8) && --timeout)
+		udelay(10);
+
+	if (!timeout)
+		pr_err("sunxi_drm: PCK600 domain %u power on timeout! PWSR=0x%x\n",
+		       domain, readl(base + 0x8));
+}
+
+static void sun60i_pck600_power_on_display(void)
+{
+	if (!of_machine_is_compatible("allwinner,sun60i-a733") &&
+	    !of_machine_is_compatible("allwinner,sun55i-a523"))
+		return;
+
+	/* Enable R_CCU CLK_BUS_R_PPU0 (bit 0) and deassert RST_BUS_R_PPU0 (bit 16) */
+	setbits_le32((void __iomem *)0x070101ac, BIT(0) | BIT(16));
+	udelay(100);
+
+	/* Domain 1: DE_SYS */
+	sun60i_pck600_power_on_domain(1);
+	/* Domain 9: VO (TCON3) */
+	sun60i_pck600_power_on_domain(9);
+	/* Domain 10: VO1 (HDMI) */
+	sun60i_pck600_power_on_domain(10);
+}
+
 static int sunxi_drm_drv_probe(struct udevice *dev)
 {
 	struct video_priv *uc_priv = dev_get_uclass_priv(dev);
@@ -552,6 +603,8 @@ static int sunxi_drm_drv_probe(struct udevice *dev)
 	struct drm_framebuffer *fb;
 
 	memset(&cmd2, 0, sizeof(struct drm_mode_fb_cmd2));
+
+	sun60i_pck600_power_on_display();
 
 	route_node = dev_read_subnode(dev, "route");
 	if (!ofnode_valid(route_node))
@@ -710,6 +763,19 @@ static int sunxi_drm_drv_probe(struct udevice *dev)
 			plat->base = fb->dma_addr;
 			plat->size = fb->buf_size;
 		}
+
+		/* Clear framebuffer scanout memory to black */
+		if (fb && fb->dma_addr)
+			memset((void *)fb->dma_addr, 0, fb->buf_size);
+
+		ret = display_enable(tmp_s);
+		if (ret)
+			pr_err("sunxi_drm: display_enable failed: %d\n", ret);
+		else
+			printf("Display: %s (%dx%d)\n",
+				 ofnode_get_name(tmp_s->node),
+				 tmp_s->conn_state.mode.hdisplay,
+				 tmp_s->conn_state.mode.vdisplay);
 	}
 
 	if (!uc_priv->xsize || !uc_priv->ysize) {
@@ -1616,7 +1682,6 @@ int sunxi_simplefb_setup(void *blob)
 	struct video_priv *uc_priv;
 	struct video_uc_plat *plat;
 	int offset, ret;
-	u64 start, size;
 
 	ret = uclass_get_device_by_driver(UCLASS_VIDEO, DM_DRIVER_GET(sunxi_display), &dev);
 	if (ret) {
@@ -1635,26 +1700,59 @@ int sunxi_simplefb_setup(void *blob)
 		return 0;
 	}
 
+	fdt_increase_size(blob, 4096);
+
 	offset = fdt_path_offset(blob, "/chosen/framebuffer@bbf12000");
 	if (offset < 0)
 		offset = fdt_path_offset(blob, "/chosen/framebuffer");
 	if (offset < 0)
 		offset = fdt_node_offset_by_compatible(blob, -1, "simple-framebuffer");
+	if (offset < 0) {
+		int chosen = fdt_path_offset(blob, "/chosen");
+		if (chosen < 0)
+			chosen = fdt_add_subnode(blob, 0, "chosen");
+		if (chosen >= 0) {
+			fdt_setprop_u32(blob, chosen, "#address-cells", 2);
+			fdt_setprop_u32(blob, chosen, "#size-cells", 2);
+			fdt_setprop_empty(blob, chosen, "ranges");
+			offset = fdt_add_subnode(blob, chosen, "framebuffer");
+			if (offset >= 0)
+				fdt_setprop_string(blob, offset, "compatible", "simple-framebuffer");
+		}
+	}
 
-	start = gd->bd->bi_dram[0].start;
-	size = plat->base - start;
-	ret = fdt_fixup_memory_banks(blob, &start, &size, 1);
+	u64 start[CONFIG_NR_DRAM_BANKS];
+	u64 size[CONFIG_NR_DRAM_BANKS];
+	int banks;
+
+	for (banks = 0; banks < CONFIG_NR_DRAM_BANKS; banks++) {
+		if (!gd->bd->bi_dram[banks].size)
+			break;
+		start[banks] = gd->bd->bi_dram[banks].start;
+		size[banks] = gd->bd->bi_dram[banks].size;
+
+		/* If the framebuffer resides inside this bank, truncate this bank at plat->base */
+		if (plat->base >= start[banks] && plat->base < (start[banks] + size[banks])) {
+			size[banks] = plat->base - start[banks];
+		}
+	}
+
+	ret = fdt_fixup_memory_banks(blob, start, size, banks);
 	if (ret)
-		printf("simplefb: error reserving memory\n");
+		printf("simplefb: error fixing up memory banks: %d\n", ret);
+
+	ret = fdt_add_mem_rsv(blob, plat->base, plat->size);
+	if (ret)
+		printf("simplefb: error adding mem reservation: %d\n", ret);
 
 	if (offset >= 0) {
 		ret = fdt_setup_simplefb_node(blob, offset, plat->base,
 					      uc_priv->xsize, uc_priv->ysize,
-					      uc_priv->xsize * 4, "a8r8g8b8");
+					      uc_priv->xsize * 4, "x8r8g8b8");
 		if (ret)
-			printf("simplefb: error setting properties\n");
+			printf("simplefb: error setting properties: %d (%s)\n", ret, fdt_strerror(ret));
 		else
-			printf("simplefb: handoff 0x%lx (%dx%d a8r8g8b8) to Linux OK\n",
+			printf("simplefb: handoff 0x%lx (%dx%d x8r8g8b8) to Linux OK\n",
 			       (unsigned long)plat->base, uc_priv->xsize, uc_priv->ysize);
 	}
 
