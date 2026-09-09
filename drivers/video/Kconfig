@@ -1169,6 +1169,58 @@ config BMP_32BPP
 	help
 	  Support display of bitmaps file with 32-bit-per-pixel.
 
+menu "Allwinner Direct Rendering Manager (DRM)"
+
+config AW_DRM
+	bool "DRM Support for Allwinner SoCs"
+	depends on VIDEO
+	select DISPLAY
+	select CLK
+	select MISC
+	select BMP
+	select BMP_16BPP
+	select BMP_24BPP
+	select BMP_32BPP
+	help
+	  DRM Support for Allwinner SoCs (Display Engine, TCON, HDMI).
+
+config AW_DRM_DE
+	bool "Support Sunxi Display Engine (DE)"
+	depends on AW_DRM
+	default y
+	help
+	  Support Allwinner Display Engine (DE 3.5.x).
+
+config AW_DRM_TCON
+	bool "Support Timing Controller (TCON)"
+	depends on AW_DRM
+	default y
+	help
+	  Support Allwinner Timing Controller (TCON).
+
+config AW_DRM_TCON_TOP
+	bool "Support TCON TOP"
+	depends on AW_DRM
+	default y
+	help
+	  Support Allwinner TCON TOP.
+
+config AW_DRM_HDMI_TX
+	bool "Support HDMI Output"
+	depends on AW_DRM
+	default y
+	help
+	  Support HDMI transmitter.
+
+config AW_DRM_HDMI20
+	bool "Support HDMI 2.0 Output"
+	depends on AW_DRM_HDMI_TX
+	default y
+	help
+	  Support DesignWare HDMI 2.0 transmitter and PHY.
+
+endmenu
+
 endif # VIDEO
 
 config SPL_VIDEO

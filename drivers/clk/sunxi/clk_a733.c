@@ -61,6 +61,22 @@ static struct ccu_clk_gate a733_gates[] = {
 	[CLK_LRADC]		= GATE(0x1024, BIT(0)),
 	[CLK_CE]		= GATE(0x0ac0, BIT(31)),
 	[CLK_BUS_CE]		= GATE(0x0ac4, BIT(0)),
+
+	/* Display clocks */
+	[CLK_PLL_VIDEO0]	= GATE(0x0120, BIT(31)),
+	[CLK_PLL_VIDEO1]	= GATE(0x0140, BIT(31)),
+	[CLK_PLL_VIDEO2]	= GATE(0x0160, BIT(31)),
+	[CLK_PLL_DE]		= GATE(0x02e0, BIT(31)),
+	[CLK_PLL_DE_3X]		= GATE_DUMMY,
+	[CLK_DE0]		= GATE(0x0a00, BIT(31)),
+	[CLK_BUS_DE0]		= GATE(0x0a04, BIT(0)),
+	[CLK_DPSS_TOP0]		= GATE(0x16c4, BIT(0)),
+	[CLK_DPSS_TOP1]		= GATE(0x16cc, BIT(0)),
+	[CLK_TCONTV0]		= GATE(0x1604, BIT(0)),
+	[CLK_TCONTV1]		= GATE(0x160c, BIT(0)),
+	[CLK_HDMI]		= GATE(0x168c, BIT(0)),
+	[CLK_HDMI_TV]		= GATE(0x1684, BIT(31)),
+	[CLK_HDMI_SFR]		= GATE(0x1690, BIT(31)),
 };
 
 static struct ccu_reset a733_resets[] = {
@@ -99,6 +115,19 @@ static struct ccu_reset a733_resets[] = {
 	[RST_USB_1_PHY_RSTN]	= RESET(0x2308, BIT(30)),
 	[RST_USB_1_OHCI]	= RESET(0x230c, BIT(16)),
 	[RST_USB_1_EHCI]	= RESET(0x230c, BIT(20)),
+
+	/* Display resets */
+	[RST_BUS_DE0]		= RESET(0x0a04, BIT(16)),
+	[RST_BUS_DE_SY]		= RESET(0x0a74, BIT(16)),
+	[RST_BUS_DPSS_TOP0]	= RESET(0x16c4, BIT(16)),
+	[RST_BUS_DPSS_TOP1]	= RESET(0x16cc, BIT(16)),
+	[RST_BUS_TCONTV0]	= RESET(0x1604, BIT(16)),
+	[RST_BUS_TCONTV1]	= RESET(0x160c, BIT(16)),
+	[RST_BUS_HDMI_MAIN]	= RESET(0x168c, BIT(16)),
+	[RST_BUS_HDMI_SUB]	= RESET(0x168c, BIT(17)),
+	[RST_BUS_HDMI_HDCP]	= RESET(0x168c, BIT(18)),
+	[RST_BUS_VIDEO_OUT0]	= RESET(0x16e4, BIT(16)),
+	[RST_BUS_VIDEO_OUT1]	= RESET(0x16ec, BIT(16)),
 };
 
 const struct ccu_desc a733_ccu_desc = {

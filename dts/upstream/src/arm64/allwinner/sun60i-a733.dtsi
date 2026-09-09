@@ -457,5 +457,123 @@
 			#pwm-cells = <3>;
 			status = "disabled";
 		};
+
+		sunxi_drm: sunxi-drm {
+			compatible = "allwinner,sunxi-drm";
+			bootph-all;
+			status = "disabled";
+
+			route {
+				disp0_hdmi0: disp0_hdmi0 {
+					enable = <0>;
+					status = "disabled";
+					endpoints = <&disp0_out_tcon3 &tcon3_out_hdmi0>;
+					logo,uboot = "bootlogo.bmp";
+				};
+			};
+		};
+
+		de: de@5000000 {
+			compatible = "allwinner,display-engine-v352";
+			reg = <0x0 0x05000000 0x0 0x400000>;
+			interrupts = <GIC_SPI 50 IRQ_TYPE_LEVEL_HIGH>,
+				     <GIC_SPI 34 IRQ_TYPE_LEVEL_HIGH>;
+			clocks = <&ccu CLK_DE0>, <&ccu CLK_BUS_DE0>;
+			clock-names = "clk_de", "clk_bus_de";
+			status = "disabled";
+
+			ports {
+				#address-cells = <1>;
+				#size-cells = <0>;
+
+				disp0: port@0 {
+					reg = <0>;
+					#address-cells = <1>;
+					#size-cells = <0>;
+
+					disp0_out_tcon3: endpoint@4 {
+						reg = <4>;
+						remote-endpoint = <&tcon3_in_disp0>;
+					};
+				};
+			};
+		};
+
+		vo1: vo1@5510000 {
+			compatible = "allwinner,tcon-top1";
+			reg = <0x0 0x05510000 0x0 0x1000>;
+			clocks = <&ccu CLK_DPSS_TOP1>;
+			clock-names = "clk_bus_dpss_top";
+			status = "disabled";
+		};
+
+		tv0: tcon3@5730000 {
+			compatible = "allwinner,tcon-tv";
+			reg = <0x0 0x05730000 0x0 0x1000>;
+			interrupts = <GIC_SPI 57 IRQ_TYPE_LEVEL_HIGH>;
+			clocks = <&ccu CLK_TCONTV0>;
+			clock-names = "rst_bus_tcon";
+			top = <&vo1>;
+			status = "disabled";
+
+			ports {
+				#address-cells = <1>;
+				#size-cells = <0>;
+
+				tcon3_in: port@0 {
+					reg = <0>;
+					#address-cells = <1>;
+					#size-cells = <0>;
+
+					tcon3_in_disp0: endpoint@0 {
+						reg = <0>;
+						remote-endpoint = <&disp0_out_tcon3>;
+					};
+				};
+
+				tcon3_out: port@1 {
+					reg = <1>;
+					#address-cells = <1>;
+					#size-cells = <0>;
+
+					tcon3_out_hdmi0: endpoint@0 {
+						reg = <0>;
+						remote-endpoint = <&hdmi0_in_tcon3>;
+					};
+				};
+			};
+		};
+
+		hdmi0: hdmi0@5520000 {
+			compatible = "allwinner,sunxi-hdmi";
+			reg = <0x0 0x05520000 0x0 0x100000>;
+			interrupts = <GIC_SPI 61 IRQ_TYPE_LEVEL_HIGH>;
+			clocks = <&ccu CLK_HDMI>,
+				 <&ccu CLK_HDMI_SFR>,
+				 <&ccu RST_BUS_HDMI_MAIN>,
+				 <&ccu RST_BUS_HDMI_SUB>;
+			clock-names = "clk_hdmi",
+				      "clk_hdmi_24M",
+				      "rst_main",
+				      "rst_sub";
+			status = "disabled";
+
+			ports {
+				#address-cells = <1>;
+				#size-cells = <0>;
+
+				hdmi_in: port@0 {
+					reg = <0>;
+					#address-cells = <1>;
+					#size-cells = <0>;
+
+					hdmi0_in_tcon3: endpoint@0 {
+						reg = <0>;
+						remote-endpoint = <&tcon3_out_hdmi0>;
+					};
+				};
+			};
+		};
 	};
 };
+
