@@ -77,6 +77,7 @@ static struct ccu_clk_gate a733_gates[] = {
 	[CLK_HDMI]		= GATE(0x168c, BIT(0)),
 	[CLK_HDMI_TV]		= GATE(0x1684, BIT(31)),
 	[CLK_HDMI_SFR]		= GATE(0x1690, BIT(31)),
+	[CLK_VID_OUT1_AHB_GATE]	= GATE(0x16ec, BIT(0)),
 };
 
 static struct ccu_reset a733_resets[] = {

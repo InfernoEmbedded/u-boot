@@ -294,7 +294,7 @@ void lvds_default_open(struct sunxi_tcon_lcd *tcon, struct disp_lvds_para *para)
 
 s32 lvds_open(struct sunxi_tcon_lcd *tcon, struct disp_lvds_para *para)
 {
-#if IS_ENABLED(CONFIG_ARCH_SUN60IW2)
+#if IS_ENABLED(CONFIG_ARCH_SUN60IW2) || IS_ENABLED(CONFIG_MACH_SUN60I_A733)
 	lvds_1903_open(tcon, para);
 #elif IS_ENABLED(CONFIG_ARCH_SUN65IW1)
 	lvds_1919_open(tcon, para);

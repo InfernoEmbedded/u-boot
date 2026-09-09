@@ -45,7 +45,7 @@ struct drm_printer {
 #define drm_printf_indent(printer, indent, fmt, ...) \
 	drm_printf((printer), "%.*s" fmt, (indent), "\t\t\t\t\tX", ##__VA_ARGS__)
 
-#define DRM_WARN(fmt, args...) pr_err(fmt, ##args)
+#define DRM_WARN(fmt, args...) pr_warn(fmt, ##args)
 #define DRM_ERROR(fmt, args...) pr_err(fmt, ##args)
 #define DRM_INFO(fmt, args...) pr_info(fmt, ##args)
 #define DRM_NOTE(fmt, args...) pr_info(fmt, ##args)

@@ -100,8 +100,8 @@
 				regulator-boot-on;
 			};
 
-			reg_dldo2: dldo2 {
-				regulator-name = "axp8191-dldo2";
+			reg_cldo2: cldo2 {
+				regulator-name = "axp8191-cldo2";
 				regulator-min-microvolt = <1800000>;
 				regulator-max-microvolt = <1800000>;
 				regulator-always-on;
@@ -261,9 +261,9 @@
 
 &hdmi0 {
 	dcdc2-supply = <&reg_dcdc2>;
-	dldo2-supply = <&reg_dldo2>;
-	hdmi_power0 = "dcdc2-supply";
-	hdmi_power1 = "dldo2-supply";
+	cldo2-supply = <&reg_cldo2>;
+	hdmi_power0 = <&reg_dcdc2>;
+	hdmi_power1 = <&reg_cldo2>;
 	uhdmi_power_count = <2>;
 
 	uhdmi_fast_output = <0>;

@@ -20,6 +20,7 @@
 #include "sunxi_drm_drv.h"
 #include <drm/drm_fourcc.h>
 #include <drm/drm_util.h>
+#include <video.h>
 
 
 
@@ -239,11 +240,17 @@ int drm_framebuffer_alloc(struct sunxi_drm_device *drm, struct drm_mode_fb_cmd2 
 	if (ret)
 		goto FREE_FB;
 
-	cpp = DIV_ROUND_UP(info->depth, 8);
-
 	fb->buf_size = ALIGN(cpp * r->width * r->height, 4096);
 
-	fb->dma_addr = (unsigned long)memalign(4096, fb->buf_size);
+	if (drm->dev) {
+		struct video_uc_plat *plat = dev_get_uclass_plat(drm->dev);
+		if (plat && plat->base && plat->size >= fb->buf_size)
+			fb->dma_addr = plat->base;
+	}
+
+	if (!fb->dma_addr)
+		fb->dma_addr = (unsigned long)memalign(4096, fb->buf_size);
+
 	if (!fb->dma_addr) {
 		ret = -ENOMEM;
 		goto FREE_FB;
@@ -285,7 +292,14 @@ int drm_framebuffer_free(struct sunxi_drm_device *drm, struct drm_framebuffer *f
 
 	list_del(&fb->head);
 	if (fb->dma_addr) {
-		kfree((void *)fb->dma_addr);
+		bool is_plat_base = false;
+		if (drm->dev) {
+			struct video_uc_plat *plat = dev_get_uclass_plat(drm->dev);
+			if (plat && plat->base == fb->dma_addr)
+				is_plat_base = true;
+		}
+		if (!is_plat_base)
+			kfree((void *)fb->dma_addr);
 	}
 	id_manager_free(&g_id_mgr, fb->fb_id);
 

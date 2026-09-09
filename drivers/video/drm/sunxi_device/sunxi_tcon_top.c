@@ -74,6 +74,12 @@ static int sunxi_tcon_top_probe(struct udevice *dev)
 
 	tcon_top_set_reg_base(top->top_data->id, top->reg_base);
 
+	if (top->top_data->id == 1) {
+		/* Deassert and ungate VO1 and DPSS_TOP1 */
+		setbits_le32((void *)0x020036ec, BIT(0) | BIT(16));
+		setbits_le32((void *)0x020036cc, BIT(0) | BIT(16));
+	}
+
 	of_periph_clk_config_setup(ofnode_to_offset(dev_ofnode(dev)));
 	DRM_INFO("%s:end\n", __func__);
 	return 0;

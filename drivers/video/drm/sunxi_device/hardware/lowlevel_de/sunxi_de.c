@@ -668,7 +668,7 @@ static int sunxi_de_parse_dts(struct udevice *dev,
 
 	engine->mclk_ahb = sunxi_clk_get(dev, "clk_ahb_de");
 	if (IS_ERR_OR_NULL(engine->mclk_ahb)) {
-		DRM_ERROR("Fail to get ahb clk for de\n");
+		engine->mclk_ahb = NULL;
 	}
 
 	engine->irq_no = sunxi_of_get_irq_number(dev, 0);
@@ -833,12 +833,11 @@ static int sunxi_de_get_disp_sys(struct sunxi_display_engine *engine)
 {
 	ofnode topnode;
 	struct udevice *top_dev = NULL;
-	u32 phandle = -1;
+	u32 phandle = 0;
 
-	ofnode_read_u32(dev_ofnode(engine->dev), "sys", &phandle);
-	if (phandle < 0) {
-		DRM_ERROR("%s:Get top phandle fail!\n", __func__);
-		return -1;
+	if (ofnode_read_u32(dev_ofnode(engine->dev), "sys", &phandle) != 0) {
+		/* sys property is optional (not needed on all SoCs) */
+		return 0;
 	}
 	topnode = ofnode_get_by_phandle(phandle);
 	if (!ofnode_valid(topnode)) {

@@ -1046,6 +1046,8 @@ static int sunxi_tcon_probe(struct udevice *dev)
 	if (tcon->type == TCON_TV) {
 		tcon->tcon_tv.tcon_index = tcon->id;
 		tcon_tv_set_reg_base(&tcon->tcon_tv, tcon->reg_base);
+		/* Un-gate and deassert TCON_TV0 */
+		setbits_le32((void *)0x02003604, BIT(0) | BIT(16));
 	}
 
 	if (tcon->type == TCON_LCD) {

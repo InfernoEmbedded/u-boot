@@ -575,9 +575,17 @@ config MACH_SUN60I_A733
 	select DRAM_SUN60I_A733
 	select FIT
 	select SPL_LOAD_FIT if SPL
+	select ARCH_SUN60IW2
+	select MACH_SUN60IW2
 	imply OF_UPSTREAM
 
 endchoice
+
+config ARCH_SUN60IW2
+	bool
+
+config MACH_SUN60IW2
+	bool
 
 # The sun8i SoCs share a lot, this helps to avoid a lot of "if A23 || A33"
 config MACH_SUN8I

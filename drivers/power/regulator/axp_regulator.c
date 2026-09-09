@@ -361,12 +361,19 @@ static const struct axp_regulator_plat axp813_regulators[] = {
 };
 
 static const struct axp_regulator_plat axp8191_regulators[] = {
+	{ "dcdc2",  0x10, BIT(1), 0x13, 0x7f,  500, 1540,  10, 70 },
 	{ "dc1sw1", 0x11, BIT(3),   NA,   NA,   NA,   NA,  NA, NA },
 	{ "dc1sw2", 0x11, BIT(4),   NA,   NA,   NA,   NA,  NA, NA },
 	{ "bldo1",  0x20, BIT(6), 0x2a, 0x1f,  500, 3500, 100, NA },
 	{ "bldo2",  0x20, BIT(7), 0x2b, 0x1f,  500, 3500, 100, NA },
 	{ "bldo4",  0x21, BIT(1), 0x2d, 0x1f,  500, 3500, 100, NA },
-	{ "dldo1",  0x21, BIT(4), 0x32, 0x1f,  500, 3500, 100, NA },
+	{ "cldo1",  0x21, BIT(3), 0x2f, 0x1f,  500, 3500, 100, NA },
+	{ "cldo2",  0x21, BIT(4), 0x30, 0x1f,  500, 3500, 100, NA },
+	{ "cldo3",  0x21, BIT(5), 0x31, 0x1f,  500, 3500, 100, NA },
+	{ "cldo4",  0x21, BIT(6), 0x32, 0x1f,  500, 3500, 100, NA },
+	{ "cldo5",  0x21, BIT(7), 0x33, 0x1f,  500, 3500, 100, NA },
+	{ "dldo1",  0x22, BIT(0), 0x34, 0x1f,  500, 3500, 100, NA },
+	{ "dldo2",  0x22, BIT(1), 0x35, 0x1f,  500, 3500, 100, NA },
 	{ }
 };
 
