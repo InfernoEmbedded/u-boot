@@ -93,4 +93,5 @@ obj-$(CONFIG_VIDEO_ZYNQMP_DPSUB) += zynqmp/
 
 obj-y += bridge/
 obj-y += sunxi/
+obj-$(CONFIG_AW_DRM) += drm/
 obj-y += tegra/

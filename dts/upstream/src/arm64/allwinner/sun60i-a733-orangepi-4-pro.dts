@@ -22,6 +22,11 @@
 
 	chosen {
 		stdout-path = "serial0:115200n8";
+
+		framebuffer: framebuffer@0 {
+			compatible = "allwinner,simple-framebuffer", "simple-framebuffer";
+			status = "disabled";
+		};
 	};
 
 	reg_usb1_vbus: regulator-usb1-vbus {
@@ -83,6 +88,22 @@
 				regulator-name = "vcc-sd";
 				regulator-min-microvolt = <3300000>;
 				regulator-max-microvolt = <3300000>;
+				regulator-always-on;
+				regulator-boot-on;
+			};
+
+			reg_dcdc2: dcdc2 {
+				regulator-name = "axp8191-dcdc2";
+				regulator-min-microvolt = <500000>;
+				regulator-max-microvolt = <1540000>;
+				regulator-always-on;
+				regulator-boot-on;
+			};
+
+			reg_dldo2: dldo2 {
+				regulator-name = "axp8191-dldo2";
+				regulator-min-microvolt = <1800000>;
+				regulator-max-microvolt = <1800000>;
 				regulator-always-on;
 				regulator-boot-on;
 			};
@@ -213,6 +234,47 @@
 };
 
 &ce {
+	status = "okay";
+};
+
+&sunxi_drm {
+	status = "okay";
+};
+
+&disp0_hdmi0 {
+	enable = <1>;
+	status = "okay";
+	logo,uboot = "bootlogo.bmp";
+};
+
+&de {
+	status = "okay";
+};
+
+&vo1 {
+	status = "okay";
+};
+
+&tv0 {
+	status = "okay";
+};
+
+&hdmi0 {
+	dcdc2-supply = <&reg_dcdc2>;
+	dldo2-supply = <&reg_dldo2>;
+	hdmi_power0 = "dcdc2-supply";
+	hdmi_power1 = "dldo2-supply";
+	uhdmi_power_count = <2>;
+
+	uhdmi_fast_output = <0>;
+	uhdmi_resistor_select = <1>;
+
+	snps_phy = <
+		 25000 185625 0x0007 0x8160 0x8188
+		185625 185625 0x0007 0x8160 0x8198
+		185625 340000 0x0004 0x8040 0x8E85
+		340000 600000 0x0000 0x80c0 0x82F6>;
+
 	status = "okay";
 };
 
