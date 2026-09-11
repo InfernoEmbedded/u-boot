@@ -36,7 +36,11 @@ s32 tcon_tv_init(struct sunxi_tcon_tv *tcon)
 	tcon->reg->tv_data_io_pol1.dwval = 0x0;
 	tcon->reg->tv_data_io_tri0.dwval = 0x0;
 	tcon->reg->tv_data_io_tri1.dwval = 0x0;
+#if (IS_ENABLED(CONFIG_MACH_SUN60IW2)) || (IS_ENABLED(CONFIG_MACH_SUN65IW1)) || (IS_ENABLED(CONFIG_MACH_SUN60I_A733)) || (IS_ENABLED(CONFIG_ARCH_SUN60IW2))
+	tcon->reg->pixel_depth_mode.dwval = 0x1; /* 8-bit RGB mode for A733 */
+#else
 	tcon->reg->pixel_depth_mode.dwval = 0x0;
+#endif
 
 	return 0;
 }
@@ -215,7 +219,14 @@ s32 tcon_tv_set_timming(struct sunxi_tcon_tv *tcon, struct disp_video_timings *t
 {
 	tcon_tv_cfg(tcon, timming);
 
-#if defined(HAVE_DEVICE_COMMON_MODULE)
+#if (IS_ENABLED(CONFIG_MACH_SUN60IW2)) || (IS_ENABLED(CONFIG_MACH_SUN65IW1)) || (IS_ENABLED(CONFIG_MACH_SUN60I_A733)) || (IS_ENABLED(CONFIG_ARCH_SUN60IW2))
+	/* A733 / sun60iw2: 0 = Enable / Pass, 1 = Disable / Tri-state */
+	tcon->reg->tcon_tv_io_pol.bits.io2_inv = 0;
+	tcon->reg->tcon_tv_io_tri.dwval = 0x00000000;
+	tcon->reg->tv_data_io_tri0.dwval = 0x00000000;
+	tcon->reg->tv_data_io_tri1.dwval = 0x00000000;
+	tcon->reg->pixel_depth_mode.dwval = 0x00000001; /* 8-bit mode */
+#elif defined(HAVE_DEVICE_COMMON_MODULE)
 	/* these register in tv_tcon1 maping to tcon1's tcon0 position */
 	tcon->reg->tcon_tv_io_tri.bits.io0_output_tri_en = 0;
 	tcon->reg->tcon_tv_io_tri.bits.io1_output_tri_en = 0;

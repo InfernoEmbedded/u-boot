@@ -37,6 +37,10 @@
 #include <linux/types.h>
 #ifndef CONFIG_ARM64
 #include <asm/armv7.h>
+#else
+#ifndef CONFIG_SPL_BUILD
+#include <linux/arm-smccc.h>
+#endif
 #endif
 #include <asm/gpio.h>
 #include <sunxi_gpio.h>
@@ -373,7 +377,7 @@ static const struct cphy_reg cphy_regs[] = {
 	{ 0x216, 0x7f },
 };
 
-static void sunxi_a733_usb_init(void)
+__maybe_unused static void sunxi_a733_usb_init(void)
 {
 	void __iomem *ccu = (void __iomem *)0x02002000;
 	void __iomem *subsys = (void __iomem *)0x06c00000;
@@ -523,8 +527,34 @@ int board_init(void)
 	if (ret)
 		return ret;
 
-#if defined(CONFIG_MACH_SUN60I_A733)
-	sunxi_a733_usb_init();
+#if defined(CONFIG_MACH_SUN60I_A733) && !defined(CONFIG_SPL_BUILD)
+	{
+		/* Unlock Non-Secure access to CCMU clock registers and SPC ports early */
+		struct arm_smccc_res smc_res;
+		int spc_idx;
+
+		/* CCMU_SEC_SWITCH_REG: unlock MBUS, BUS, PLL clock registers */
+		arm_smccc_smc(0xC000FF06, 0x02003F00, 0x00000007, 0, 0, 0, 0, 0, &smc_res);
+
+		/* SPC_SETTING_REGs: enable non-secure access to all 24 master ports */
+		for (spc_idx = 0; spc_idx <= 0x5C; spc_idx += 4)
+			arm_smccc_smc(0xC000FF06, 0x02054000 + spc_idx, 0xFFFFFFFF, 0, 0, 0, 0, 0, &smc_res);
+
+		/* Enable PLL_DE (0x020022E0) with output gates 0 and 1 un-gated (0xEC125600) for DE3.5 */
+		writel(0xEC125600, (void *)0x020022E0);
+
+		/* Enable Clock Matrix for DE and Video Out: CM_DESYS (0x02003B04), CM_VO (0x02003B34), CM_VO1 (0x02003B38) */
+		writel(0x00020001, (void *)0x02003B04);
+		writel(0x00020001, (void *)0x02003B34);
+		writel(0x00020001, (void *)0x02003B38);
+
+		/* Deassert DE resets and enable bus gating and module clock */
+		writel(0x00010001, (void *)0x02002A74); /* DE_SYS_BGR_REG */
+		writel(0x00010001, (void *)0x02002A04); /* DE0_BGR_REG */
+		writel(0x80000000, (void *)0x02002A00); /* DE0_CLK_REG: DEPLL3X, div 1, gate ON */
+
+		sunxi_a733_usb_init();
+	}
 #endif
 
 	eth_init_board();
@@ -1213,15 +1243,13 @@ int misc_init_r(void)
 	return 0;
 }
 
-#include <linux/arm-smccc.h>
-
 int board_late_init(void)
 {
 #ifdef CONFIG_USB_ETHER
 	usb_ether_init();
 #endif
 
-#if defined(CONFIG_MACH_SUN60I_A733)
+#if defined(CONFIG_MACH_SUN60I_A733) && !defined(CONFIG_SPL_BUILD)
 	/* Unlock Non-Secure access to CCMU clock registers and SPC ports */
 	struct arm_smccc_res smc_res;
 	int spc_idx;

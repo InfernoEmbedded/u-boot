@@ -606,6 +606,18 @@ static int sunxi_drm_drv_probe(struct udevice *dev)
 
 	sun60i_pck600_power_on_display();
 
+#if defined(CONFIG_MACH_SUN60I_A733) && !defined(CONFIG_SPL_BUILD)
+	/* Defensive un-gate: PLL_DE output gates 0/1 and Clock Matrix interconnects */
+	writel(0xEC125600, (void *)0x020022E0);
+	writel(0x00020001, (void *)0x02003B04);
+	writel(0x00020001, (void *)0x02003B34);
+	writel(0x00020001, (void *)0x02003B38);
+	writel(0x00010001, (void *)0x02002A74);
+	writel(0x00010001, (void *)0x02002A04);
+	writel(0x80000000, (void *)0x02002A00);
+#endif
+
+
 	route_node = dev_read_subnode(dev, "route");
 	if (!ofnode_valid(route_node))
 		return -ENODEV;
@@ -742,6 +754,7 @@ static int sunxi_drm_drv_probe(struct udevice *dev)
 	display_pre_init();
 
 	sunxi_drm_for_each_display(tmp_s, drm) {
+		memset(&cmd2, 0, sizeof(cmd2));
 		cmd2.width = tmp_s->conn_state.mode.hdisplay;
 		cmd2.height = tmp_s->conn_state.mode.vdisplay;
 		cmd2.pixel_format = DRM_FORMAT_ARGB8888;
@@ -809,8 +822,8 @@ U_BOOT_DRIVER(sunxi_display) = {
 	.bind	= sunxi_drm_drv_bind,
 	.probe	= sunxi_drm_drv_probe,
 	.priv_auto = sizeof(struct sunxi_drm_device),
-	.flags = DM_FLAG_PRE_RELOC,
 };
+
 
 
 struct sunxi_drm_crtc *sunxi_drm_crtc_find(struct sunxi_drm_device *drm, int crtc_id)
@@ -1681,7 +1694,7 @@ int sunxi_simplefb_setup(void *blob)
 	struct udevice *dev;
 	struct video_priv *uc_priv;
 	struct video_uc_plat *plat;
-	int offset, ret;
+	int offset, ret, chosen;
 
 	ret = uclass_get_device_by_driver(UCLASS_VIDEO, DM_DRIVER_GET(sunxi_display), &dev);
 	if (ret) {
@@ -1702,44 +1715,25 @@ int sunxi_simplefb_setup(void *blob)
 
 	fdt_increase_size(blob, 4096);
 
+	chosen = fdt_path_offset(blob, "/chosen");
+	if (chosen < 0)
+		chosen = fdt_add_subnode(blob, 0, "chosen");
+	if (chosen >= 0) {
+		fdt_setprop_u32(blob, chosen, "#address-cells", 2);
+		fdt_setprop_u32(blob, chosen, "#size-cells", 2);
+		fdt_setprop_empty(blob, chosen, "ranges");
+	}
+
 	offset = fdt_path_offset(blob, "/chosen/framebuffer@bbf12000");
 	if (offset < 0)
 		offset = fdt_path_offset(blob, "/chosen/framebuffer");
 	if (offset < 0)
 		offset = fdt_node_offset_by_compatible(blob, -1, "simple-framebuffer");
-	if (offset < 0) {
-		int chosen = fdt_path_offset(blob, "/chosen");
-		if (chosen < 0)
-			chosen = fdt_add_subnode(blob, 0, "chosen");
-		if (chosen >= 0) {
-			fdt_setprop_u32(blob, chosen, "#address-cells", 2);
-			fdt_setprop_u32(blob, chosen, "#size-cells", 2);
-			fdt_setprop_empty(blob, chosen, "ranges");
-			offset = fdt_add_subnode(blob, chosen, "framebuffer");
-			if (offset >= 0)
-				fdt_setprop_string(blob, offset, "compatible", "simple-framebuffer");
-		}
+	if (offset < 0 && chosen >= 0) {
+		offset = fdt_add_subnode(blob, chosen, "framebuffer");
+		if (offset >= 0)
+			fdt_setprop_string(blob, offset, "compatible", "simple-framebuffer");
 	}
-
-	u64 start[CONFIG_NR_DRAM_BANKS];
-	u64 size[CONFIG_NR_DRAM_BANKS];
-	int banks;
-
-	for (banks = 0; banks < CONFIG_NR_DRAM_BANKS; banks++) {
-		if (!gd->bd->bi_dram[banks].size)
-			break;
-		start[banks] = gd->bd->bi_dram[banks].start;
-		size[banks] = gd->bd->bi_dram[banks].size;
-
-		/* If the framebuffer resides inside this bank, truncate this bank at plat->base */
-		if (plat->base >= start[banks] && plat->base < (start[banks] + size[banks])) {
-			size[banks] = plat->base - start[banks];
-		}
-	}
-
-	ret = fdt_fixup_memory_banks(blob, start, size, banks);
-	if (ret)
-		printf("simplefb: error fixing up memory banks: %d\n", ret);
 
 	ret = fdt_add_mem_rsv(blob, plat->base, plat->size);
 	if (ret)

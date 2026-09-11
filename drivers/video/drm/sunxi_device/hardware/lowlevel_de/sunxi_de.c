@@ -649,6 +649,8 @@ int sunxi_de_event_proc(struct sunxi_de_out *hwde)
 static int sunxi_de_parse_dts(struct udevice *dev,
 			      struct sunxi_display_engine *engine)
 {
+	struct reset_ctl_bulk resets;
+
 	engine->reg_base = (uintptr_t)dev_read_addr_ptr(dev);
 
 	if (!engine->reg_base) {
@@ -670,6 +672,9 @@ static int sunxi_de_parse_dts(struct udevice *dev,
 	if (IS_ERR_OR_NULL(engine->mclk_ahb)) {
 		engine->mclk_ahb = NULL;
 	}
+
+	if (!reset_get_bulk(dev, &resets))
+		reset_deassert_bulk(&resets);
 
 	engine->irq_no = sunxi_of_get_irq_number(dev, 0);
 	if (!engine->irq_no) {

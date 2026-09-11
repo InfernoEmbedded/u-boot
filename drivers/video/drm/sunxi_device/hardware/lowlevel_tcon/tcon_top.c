@@ -9,6 +9,8 @@
  * License version 2.  This program is licensed "as is" without any
  * warranty of any kind, whether express or implied.
  */
+#include <asm/io.h>
+#include <linux/bitops.h>
 #include "tcon_top_type.h"
 #include "tcon_top.h"
 
@@ -156,11 +158,13 @@ s32 tcon1_hdmi_clk_enable(u32 sel, u32 en)
 	if (sel >= TCON_DEVICE_MAX)
 		return -1;
 
-#if (IS_ENABLED(CONFIG_MACH_SUN60IW2)) || (IS_ENABLED(CONFIG_MACH_SUN65IW1)) || (IS_ENABLED(CONFIG_MACH_SUN60I_A733))
+#if (IS_ENABLED(CONFIG_MACH_SUN60IW2)) || (IS_ENABLED(CONFIG_MACH_SUN65IW1)) || (IS_ENABLED(CONFIG_MACH_SUN60I_A733)) || (IS_ENABLED(CONFIG_ARCH_SUN60IW2))
 	if (tcon_top[(sel > 2) ? 1 : 0]) {
 		tcon_top[(sel > 2) ? 1 : 0]->tcon_clk_gate.bits.tv0_clk_gate = en;
 		tcon_top[(sel > 2) ? 1 : 0]->tcon_clk_gate.bits.hdmi_src = en;
 	}
+	if (en)
+		setbits_le32((void *)0x05510020, BIT(28) | BIT(20));
 #else
 	if (sel == 2)
 		tcon_top[0]->tcon_clk_gate.bits.tv0_clk_gate = en;
@@ -179,7 +183,7 @@ s32 tcon1_hdmi_clk_enable(u32 sel, u32 en)
 
 s32 tcon_hdmi_clk_src_sel(u32 sel, u32 src)
 {
-#if (IS_ENABLED(CONFIG_MACH_SUN60IW2)) || (IS_ENABLED(CONFIG_MACH_SUN65IW1)) || (IS_ENABLED(CONFIG_MACH_SUN60I_A733))
+#if (IS_ENABLED(CONFIG_MACH_SUN60IW2)) || (IS_ENABLED(CONFIG_MACH_SUN65IW1)) || (IS_ENABLED(CONFIG_MACH_SUN60I_A733)) || (IS_ENABLED(CONFIG_ARCH_SUN60IW2))
 	/* next do: use platform data check version id */
 	u8 bank = 0;
 

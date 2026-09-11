@@ -460,6 +460,7 @@
 
 		sunxi_drm: sunxi-drm {
 			compatible = "allwinner,sunxi-drm";
+			bootph-all;
 			status = "disabled";
 
 			route {
@@ -479,6 +480,8 @@
 				     <GIC_SPI 34 IRQ_TYPE_LEVEL_HIGH>;
 			clocks = <&ccu CLK_DE0>, <&ccu CLK_BUS_DE0>;
 			clock-names = "clk_de", "clk_bus_de";
+			resets = <&ccu RST_BUS_DE0>, <&ccu RST_BUS_DE_SY>;
+			reset-names = "rst_bus_de", "rst_bus_de_sys";
 			status = "disabled";
 
 			ports {
