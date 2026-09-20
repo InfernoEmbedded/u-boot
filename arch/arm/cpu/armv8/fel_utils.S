@@ -42,7 +42,7 @@ ENTRY(return_to_fel)
 
 	ldr	w0, =0xfa50392f		// CPU hotplug magic
 #if defined(CONFIG_MACH_SUN50I_H616) || defined(CONFIG_MACH_SUN50I_A133) || \
-    defined(CONFIG_MACH_SUN55I_A523)
+    defined(CONFIG_MACH_SUN55I_A523) || defined(CONFIG_MACH_SUN60I_A733)
 	ldr	w2, =(SUNXI_R_CPUCFG_BASE + 0x1c0)
 	str	w0, [x2], #0x4
 #elif defined(CONFIG_MACH_SUN50I_H6)
@@ -82,7 +82,7 @@ back_in_32:
 	.word	0xe590100c	// ldr	r1, [r0, #12]
 	.word	0xee011f10	// mcr	15, 0, r1, cr1, cr0, {0}  ; SCTLR
 	.word	0xf57ff06f	// isb
-#ifdef CONFIG_MACH_SUN55I_A523
+#if defined(CONFIG_MACH_SUN55I_A523) || defined(CONFIG_MACH_SUN60I_A733)
 	.word	0xe5901018	// ldr  r1, [r0, #24]
 	.word	0xee041f16	// mcr  15, 0, r1, cr4, cr6, {0}; ICC_PMR
 	.word	0xe590101c	// ldr  r1, [r0, #28]
