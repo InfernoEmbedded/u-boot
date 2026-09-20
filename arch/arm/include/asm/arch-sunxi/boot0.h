@@ -32,7 +32,7 @@
 	.word	0xe580e00c	// str     lr, [r0, #12]
 	.word	0xee1cef10	// mrc     15, 0, lr, cr12, cr0, {0}
 	.word	0xe580e010	// str     lr, [r0, #16]
-#ifdef CONFIG_MACH_SUN55I_A523
+#if defined(CONFIG_MACH_SUN55I_A523) || defined(CONFIG_MACH_SUN60I_A733)
 	.word	0xee1cefbc	// mrc     15, 0, lr, cr12, cr12, {5}
 	.word	0xe31e0001	// tst     lr, #1
 	.word	0x0a000003	// beq     cc <start32+0x48>
