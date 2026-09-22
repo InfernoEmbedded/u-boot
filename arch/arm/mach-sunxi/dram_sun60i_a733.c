@@ -281,9 +281,44 @@ static int mctl_phy_init(void)
 
 
 
+/*
+ * Calculate DRAM size matching Allwinner boot0 FUN_0004b74c algorithm:
+ *   para1: bits[3:0]=cols, bits[11:4]=rows, bits[13:12]=banks, bits[15:14]=bank_groups
+ *   para2: bits[15:12]=ranks
+ *   dram_tpr13: bit 6 (bus width/density adjustment), bits[18:16] (3/4 capacity flag)
+ */
+static unsigned long sun60i_a733_calc_dram_size(const u32 *para)
+{
+	u32 para1 = para[0x18 / 4];
+	u32 para2 = para[0x1c / 4];
+	u32 tpr13 = para[0x78 / 4];
+
+	u32 cols = para1 & 0xf;
+	u32 rows = (para1 & 0xfff) >> 4;
+	u32 banks = (para1 & 0x3fff) >> 12;
+	u32 bank_groups = (para1 & 0xffff) >> 14;
+	u32 ranks = (para2 & 0xffff) >> 12;
+
+	u32 sum = ranks + bank_groups + rows + banks + cols;
+	u32 shift;
+
+	if ((para2 & 0xf) == 0)
+		shift = sum - 18;
+	else if ((tpr13 & 0x40) == 0)
+		shift = sum - 19;
+	else
+		shift = sum - 18;
+
+	u32 size_mb = 1U << (shift & 0xff);
+
+	if ((tpr13 & 0x70000) && ((para2 >> 30) != 2))
+		size_mb = (size_mb * 3) >> 2;
+
+	return (unsigned long)size_mb << 20;
+}
+
 unsigned long sunxi_dram_init(void)
 {
-	unsigned long size = 16ULL * 1024 * 1024 * 1024;
 	int ret;
 
 	u32 *para = (u32 *)boot0_dram_para;
@@ -347,5 +382,5 @@ unsigned long sunxi_dram_init(void)
 		while (1); /* halt on failure */
 	}
 
-	return size;
+	return sun60i_a733_calc_dram_size(para);
 }
