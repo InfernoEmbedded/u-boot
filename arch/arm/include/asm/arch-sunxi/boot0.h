@@ -41,6 +41,33 @@
 	.word	0xee1ceffc	// mrc     15, 0, lr, cr12, cr12, {7}
 	.word	0xe580e01c	// str     lr, [r0, #28]
 #endif
+#if defined(CONFIG_MACH_SUN60I_A733)
+	.word	0xe59f103c	// ldr     r1, [pc, #60] ; 0x08001000
+	.word	0xe3a02001	// mov     r2, #1
+	.word	0xe5812000	// str     r2, [r1]
+	.word	0xe59f0034	// ldr     r0, [pc, #52] ; CONFIG_*TEXT_BASE
+	.word	0xe5810004	// str     r0, [r1, #4]
+	.word	0xe3a02000	// mov     r2, #0
+	.word	0xe5812008	// str     r2, [r1, #8]
+	.word	0xe59f1028	// ldr     r1, [pc, #40] ; 0x08000200
+	.word	0xe5812000	// str     r2, [r1]
+	.word	0xf57ff04f	// dsb     sy
+	.word	0xf57ff06f	// isb     sy
+	.word	0xee1c0f50	// mrc     15, 0, r0, cr12, cr0, {2} ; RMR
+	.word	0xe3800003	// orr     r0, r0, #3
+	.word	0xee0c0f50	// mcr     15, 0, r0, cr12, cr0, {2} ; RMR
+	.word	0xf57ff06f	// isb     sy
+	.word	0xe320f003	// wfi
+	.word	0xeafffffd	// b       @wfi
+
+	.word	0x08001000	// CLU0_CPU0_CTRL_REG
+#ifdef CONFIG_XPL_BUILD
+	.word	CONFIG_SPL_TEXT_BASE
+#else
+	.word	CONFIG_TEXT_BASE
+#endif
+	.word	0x08000200	// CPU_DA_DDR_CTRL_REG
+#else
 	.word	0xe59f1034	// ldr     r1, [pc, #52] ; RVBAR_ADDRESS
 	.word	0xe59f0034	// ldr     r0, [pc, #52] ; SUNXI_SRAMC_BASE
 	.word	0xe5900024	// ldr     r0, [r0, #36] ; SRAM_VER_REG
@@ -64,6 +91,7 @@
 	.word	CONFIG_SPL_TEXT_BASE
 #else
 	.word   CONFIG_TEXT_BASE
+#endif
 #endif
 #else
 /* normal execution */
