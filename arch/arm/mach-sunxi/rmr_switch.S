@@ -38,17 +38,22 @@
 	.space  0x7c
 
 start32:
-	/* 1. Un-gate APB1 clock: CCU (0x02002000) + 0x524 = 0 (24MHz OSC24M) */
+	/* 1. Enter SVC mode, disable IRQ & FIQ */
+	mrs	r0, cpsr
+	bic	r0, r0, #0x1f
+	orr	r0, r0, #0x13
+	orr	r0, r0, #0xc0
+	msr	cpsr_c, r0
+
+	/* 2. Set SP in SRAM */
+	ldr	sp, =0x0008d000
+
+	/* 3. Un-gate UART0 clock & deassert reset: CCU (0x02002000) + 0x0e00 = 0x00010001 */
 	ldr	r1, =0x02002000
-	mov	r2, #0
-	str	r2, [r1, #0x524]
-
-	/* 2. Un-gate UART0 clock & reset: 0x02002000 + 0x0e00 = 0x00010001 */
 	ldr	r2, =0x00010001
-	str	r2, [r1, #0xe00]
-	str	r2, [r1, #0x90c]
+	str	r2, [r1, #0x0e00]
 
-	/* 3. Configure Pinmux PB9/PB10: 0x02000104 = 0x00000220 */
+	/* 4. Configure Pinmux PB9/PB10: 0x02000104 = 0x00000220 */
 	ldr	r1, =0x02000100
 	ldr	r2, [r1, #0x04]
 	ldr	r3, =0x00000ff0
@@ -63,7 +68,7 @@ start32:
 	orr	r2, r2, r3
 	str	r2, [r1, #0x24]
 
-	/* 4. Init UART0 at 0x02500000: 115200 8N1 */
+	/* 5. Init UART0 at 0x02500000: 115200 8N1 @ 24MHz */
 	ldr	r4, =0x02500000
 	mov	r2, #0x83
 	str	r2, [r4, #0x0c]
@@ -75,10 +80,23 @@ start32:
 	str	r2, [r4, #0x0c]
 	mov	r2, #0x07
 	str	r2, [r4, #0x08]
-	mov	r2, #0x21		/* char '!' */
+
+	/* 6. Send beacon '!' (0x21) */
+	mov	r2, #0x21
 	str	r2, [r4, #0x00]
 
-	/* 5. Set CPU cluster control registers */
+	/* 7. Drain UART0 FIFO & transmitter before resetting CPU */
+1:	ldr	r2, [r4, #0x14]
+	tst	r2, #0x40
+	beq	1b
+	ldr	r2, =200000
+2:	subs	r2, r2, #1
+	bne	2b
+
+	/* 8. Configure CPU cluster control registers */
+	ldr	r1, =0x08000200
+	mov	r2, #0
+	str	r2, [r1]			// CPU_DA_DDR_CTRL_REG = 0
 	ldr	r1, =0x08001000
 	mov	r2, #1
 	str	r2, [r1]			// CLU0_CPU0_CTRL_REG = 1 (AA64 mode)
@@ -90,9 +108,6 @@ start32:
 	str	r0, [r1, #4]			// CLU0_RVBARADDR0_L
 	mov	r2, #0
 	str	r2, [r1, #8]			// CLU0_RVBARADDR0_H = 0
-	ldr	r1, =0x08000200
-	str	r2, [r1]			// CPU_DA_DDR_CTRL_REG = 0
-	.ltorg
 #else
 	.space  0x78			// gap distance set by the common
 					// encoding of the first instruction
