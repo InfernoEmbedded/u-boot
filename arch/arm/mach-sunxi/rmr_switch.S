@@ -34,6 +34,66 @@
 	b	start32			// this is "tst x0, x0" in AArch64
 	.word	0x14000047		// this is "b   reset"  in AArch64
 
+#if defined(CONFIG_MACH_SUN60I_A733)
+	.space  0x7c
+
+start32:
+	/* 1. Un-gate APB1 clock: CCU (0x02002000) + 0x524 = 0 (24MHz OSC24M) */
+	ldr	r1, =0x02002000
+	mov	r2, #0
+	str	r2, [r1, #0x524]
+
+	/* 2. Un-gate UART0 clock & reset: 0x02002000 + 0x0e00 = 0x00010001 */
+	ldr	r2, =0x00010001
+	str	r2, [r1, #0xe00]
+	str	r2, [r1, #0x90c]
+
+	/* 3. Configure Pinmux PB9/PB10: 0x02000104 = 0x00000220 */
+	ldr	r1, =0x02000100
+	ldr	r2, [r1, #0x04]
+	ldr	r3, =0x00000ff0
+	bic	r2, r2, r3
+	ldr	r3, =0x00000220
+	orr	r2, r2, r3
+	str	r2, [r1, #0x04]
+	ldr	r2, [r1, #0x24]
+	ldr	r3, =0x000f0000
+	bic	r2, r2, r3
+	ldr	r3, =0x00050000
+	orr	r2, r2, r3
+	str	r2, [r1, #0x24]
+
+	/* 4. Init UART0 at 0x02500000: 115200 8N1 */
+	ldr	r4, =0x02500000
+	mov	r2, #0x83
+	str	r2, [r4, #0x0c]
+	mov	r2, #13
+	str	r2, [r4, #0x00]
+	mov	r2, #0
+	str	r2, [r4, #0x04]
+	mov	r2, #0x03
+	str	r2, [r4, #0x0c]
+	mov	r2, #0x07
+	str	r2, [r4, #0x08]
+	mov	r2, #0x21		/* char '!' */
+	str	r2, [r4, #0x00]
+
+	/* 5. Set CPU cluster control registers */
+	ldr	r1, =0x08001000
+	mov	r2, #1
+	str	r2, [r1]			// CLU0_CPU0_CTRL_REG = 1 (AA64 mode)
+#ifdef CONFIG_XPL_BUILD
+	ldr	r0, =CONFIG_SPL_TEXT_BASE
+#else
+	ldr	r0, =CONFIG_TEXT_BASE
+#endif
+	str	r0, [r1, #4]			// CLU0_RVBARADDR0_L
+	mov	r2, #0
+	str	r2, [r1, #8]			// CLU0_RVBARADDR0_H = 0
+	ldr	r1, =0x08000200
+	str	r2, [r1]			// CPU_DA_DDR_CTRL_REG = 0
+	.ltorg
+#else
 	.space  0x78			// gap distance set by the common
 					// encoding of the first instruction
 fel_stash_addr:
@@ -55,7 +115,7 @@ start32:
 	str	lr, [r0, #12]
 	mrc	p15, 0, lr, cr12, cr0, 0	// VBAR
 	str	lr, [r0, #16]
-//#ifdef CONFIG_MACH_SUN55I_A523
+#ifdef CONFIG_MACH_SUN55I_A523
 	mrc	p15, 0, lr, cr12, cr12, 5	// ICC_SRE
 	tst	lr, #1
 	beq	1f
@@ -64,22 +124,7 @@ start32:
 	mrc	p15, 0, lr, c12, c12, 7		// ICC_IGRPEN1
 	str	lr, [r0, #28]
 1:
-//#endif
-
-#if defined(CONFIG_MACH_SUN60I_A733)
-	ldr	r1, =0x08001000
-	mov	r2, #1
-	str	r2, [r1]			// CLU0_CPU0_CTRL_REG = 1 (AA64 mode)
-#ifdef CONFIG_XPL_BUILD
-	ldr	r0, =CONFIG_SPL_TEXT_BASE
-#else
-	ldr	r0, =CONFIG_TEXT_BASE
 #endif
-	str	r0, [r1, #4]			// CLU0_RVBARADDR0_L (0x08001004)
-	mov	r2, #0
-	str	r2, [r1, #8]			// CLU0_RVBARADDR0_H (0x08001008) = 0
-	ldr	r1, =0x08000200
-	str	r2, [r1]			// CPU_DA_DDR_CTRL_REG = 0
 #else
 	ldr	r1, =CONFIG_SUNXI_RVBAR_ADDRESS
 	ldr	r0, =SUNXI_SRAMC_BASE
