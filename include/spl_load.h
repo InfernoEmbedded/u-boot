@@ -21,12 +21,16 @@ static inline int _spl_load(struct spl_image_info *spl_image,
 	int read, ret;
 
 	log_debug("\nloading hdr from %lx to %p\n", (ulong)offset, header);
+	printf("SPL: _spl_load: reading hdr from offset 0x%lx to %p...\n", (ulong)offset, header);
 	read = info->read(info, offset, ALIGN(sizeof(*header),
 					      spl_get_bl_len(info)), header);
+	printf("SPL: _spl_load: read=%d (expected %d), magic=0x%08x\n",
+	       read, (int)sizeof(*header), header ? image_get_magic(header) : 0);
 	if (read < (int)sizeof(*header))
 		return -EIO;
 
 	if (image_get_magic(header) == FDT_MAGIC) {
+		printf("SPL: _spl_load: Found FIT magic!\n");
 		log_debug("Found FIT\n");
 		if (CONFIG_IS_ENABLED(LOAD_FIT_FULL)) {
 			void *buf;

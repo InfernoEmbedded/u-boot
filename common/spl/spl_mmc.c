@@ -20,10 +20,23 @@ static ulong h_spl_load_read(struct spl_load_info *load, ulong off,
 			     ulong size, void *buf)
 {
 	struct blk_desc *bd = load->priv;
-	lbaint_t sector = off >> bd->log2blksz;
-	lbaint_t count = size >> bd->log2blksz;
+	int shift = bd ? bd->log2blksz : 9;
+	lbaint_t sector = off >> shift;
+	lbaint_t count = size >> shift;
+	ulong ret;
 
-	return blk_dread(bd, sector, count, buf) << bd->log2blksz;
+	printf("SPL: h_spl_load_read: load=0x%lx bd=0x%lx shift=%d off=0x%lx (sect=0x%lx) count=%lu bytes=%lu buf=0x%lx\n",
+	       (ulong)load, (ulong)bd, shift, off, (ulong)sector, (ulong)count, size, (ulong)buf);
+	ret = blk_dread(bd, sector, count, buf);
+	printf("SPL: h_spl_load_read: blk_dread returned %lu sectors\n", ret);
+
+	u32 *p = (u32 *)buf;
+	printf("SPL: h_spl_load_read: buf[0..3]=0x%08x 0x%08x 0x%08x 0x%08x\n",
+	       p[0], p[1], p[2], p[3]);
+
+	ulong bytes_read = ret << shift;
+	printf("SPL: h_spl_load_read: returning %lu bytes\n", bytes_read);
+	return bytes_read;
 }
 
 static __maybe_unused unsigned long spl_mmc_raw_uboot_offset(int part)
@@ -45,8 +58,11 @@ int mmc_load_image_raw_sector(struct spl_image_info *spl_image,
 	struct blk_desc *bd = mmc_get_blk_desc(mmc);
 	struct spl_load_info load;
 
+	printf("SPL: mmc_load_image_raw_sector: sector=0x%lx (byte offset=0x%lx)\n",
+	       sector, sector << bd->log2blksz);
 	spl_load_init(&load, h_spl_load_read, bd, bd->blksz);
 	ret = spl_load(spl_image, bootdev, &load, 0, sector << bd->log2blksz);
+	printf("SPL: spl_load returned %d\n", ret);
 	if (ret) {
 		puts("mmc_load_image_raw_sector: mmc block read error\n");
 		log_debug("(error=%d)\n", ret);
@@ -459,6 +475,7 @@ int spl_mmc_load(struct spl_image_info *spl_image,
 int spl_mmc_load_image(struct spl_image_info *spl_image,
 		       struct spl_boot_device *bootdev)
 {
+	printf("SPL: spl_mmc_load_image called for bootdev %d\n", bootdev->boot_device);
 	return spl_mmc_load(spl_image, bootdev,
 #ifdef CONFIG_SPL_FS_LOAD_PAYLOAD_NAME
 			    CONFIG_SPL_FS_LOAD_PAYLOAD_NAME,

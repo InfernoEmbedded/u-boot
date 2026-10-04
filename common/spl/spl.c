@@ -684,6 +684,7 @@ void board_init_r(gd_t *dummy1, ulong dummy2)
 	void *fdt;
 
 	debug(">>" PHASE_PROMPT "board_init_r()\n");
+	printf("SPL: >>> ENTERED board_init_r! <<<\n");
 
 	spl_set_bd();
 
@@ -923,6 +924,8 @@ ulong spl_relocate_stack_gd(void)
 	gd_t *new_gd;
 	ulong ptr = CONFIG_SPL_STACK_R_ADDR;
 
+	printf("SPL: entering spl_relocate_stack_gd, STACK_R=0x%lx\n", ptr);
+
 	if (CONFIG_IS_ENABLED(SYS_REPORT_STACK_F_USAGE))
 		spl_relocate_stack_check();
 
@@ -940,7 +943,9 @@ ulong spl_relocate_stack_gd(void)
 	ptr -= roundup(sizeof(gd_t), 16);
 	gd->start_addr_sp = ptr;
 	new_gd = (gd_t *)ptr;
+	printf("SPL: relocating gd to new_gd at 0x%lx...\n", ptr);
 	memcpy(new_gd, (void *)gd, sizeof(gd_t));
+	printf("SPL: gd memcpy done, new sp=0x%lx\n", ptr);
 #if CONFIG_IS_ENABLED(DM)
 	dm_fixup_for_gd_move(new_gd);
 #endif

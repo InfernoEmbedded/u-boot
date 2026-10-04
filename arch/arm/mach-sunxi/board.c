@@ -22,6 +22,7 @@
 #include <asm/io.h>
 #include <asm/arch/clock.h>
 #include <asm/arch/spl.h>
+#include <asm/arch/spl_spi.h>
 #include <asm/arch/sys_proto.h>
 #include <asm/arch/timer.h>
 #include <asm/arch/tzpc.h>
@@ -282,12 +283,20 @@ static int sunxi_get_boot_source(void)
 
 	if (IS_ENABLED(CONFIG_MACH_SUNIV))
 		return suniv_get_boot_source();
-	if (sunxi_egon_valid(egon_head))
-		return readb(&egon_head->boot_media);
-	if (sunxi_toc0_valid(toc0_info))
-		return readb(&toc0_info->platform[0]);
+	printf("SPL: sunxi_get_boot_source: checking SPL_ADDR 0x%lx (magic: %.8s)\n", (ulong)SPL_ADDR, egon_head->magic);
+	if (sunxi_egon_valid(egon_head)) {
+		int media = readb(&egon_head->boot_media);
+		printf("SPL: eGON header valid! boot_media=%d\n", media);
+		return media;
+	}
+	if (sunxi_toc0_valid(toc0_info)) {
+		int media = readb(&toc0_info->platform[0]);
+		printf("SPL: TOC0 header valid! platform=%d\n", media);
+		return media;
+	}
 
 	/* Not a valid image, so we must have been booted via FEL. */
+	printf("SPL: No valid eGON/TOC0 header at 0x%lx! Defaulting to FEL.\n", (ulong)SPL_ADDR);
 	return SUNXI_INVALID_BOOT_SOURCE;
 }
 
@@ -373,6 +382,23 @@ unsigned long board_spl_mmc_get_uboot_raw_sector(struct mmc *mmc,
 			sector += 128 * 2;
 		break;
 	}
+
+
+#if IS_ENABLED(CONFIG_SPL_SPI_SUNXI)
+	{
+		u8 spi_buf[64] __aligned(64) = {0};
+
+		printf("SPL: Probing SPI NOR flash...\n");
+		spi0_init();
+		spi0_read_data(spi_buf, 0, 64);
+		printf("SPL: SPI NOR [0x00000]: branch=0x%08x magic=%.8s len=%u\n",
+		       *(u32 *)&spi_buf[0], &spi_buf[4], *(u32 *)&spi_buf[16]);
+		spi0_read_data(spi_buf, 0x40000, 64);
+		printf("SPL: SPI NOR [0x40000]: magic=%.8s name=%.8s raw=0x%08x\n",
+		       &spi_buf[0], &spi_buf[4], *(u32 *)&spi_buf[0]);
+		spi0_deinit();
+	}
+#endif
 
 	return sector;
 }
@@ -496,6 +522,7 @@ void board_init_f(ulong dummy)
 	i2c_init(CONFIG_SYS_I2C_SPEED, CONFIG_SYS_I2C_SLAVE);
 #endif
 	sunxi_board_init();
+	printf("SPL: board_init_f returning to crt0_64.S\n");
 }
 #endif /* CONFIG_XPL_BUILD */
 

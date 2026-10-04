@@ -7,6 +7,7 @@
 #include <log.h>
 #include <spl.h>
 #include <asm/arch/spl.h>
+#include <asm/arch/spl_spi.h>
 #include <asm/gpio.h>
 #include <asm/io.h>
 #include <linux/bitops.h>
@@ -62,6 +63,7 @@
 #define SUN6I_SPI0_CCTL             0x24
 #define SUN6I_SPI0_GCR              0x04
 #define SUN6I_SPI0_TCR              0x08
+#define SUN6I_SPI0_FIFO_CTL         0x18
 #define SUN6I_SPI0_FIFO_STA         0x1C
 #define SUN6I_SPI0_MBC              0x30
 #define SUN6I_SPI0_MTC              0x34
@@ -72,12 +74,19 @@
 #define SUN6I_CTL_ENABLE            BIT(0)
 #define SUN6I_CTL_MASTER            BIT(1)
 #define SUN6I_CTL_SRST              BIT(31)
+#define SUN6I_FIFO_CTL_RF_RST       BIT(15)
+#define SUN6I_FIFO_CTL_TF_RST       BIT(31)
+#define SUN6I_TCR_CS_ACTIVE_LOW     BIT(2)
+#define SUN6I_TCR_CS_MANUAL         BIT(6)
+#define SUN6I_TCR_CS_LEVEL          BIT(7)
 #define SUN6I_TCR_SDM               BIT(13)
 #define SUN6I_TCR_XCH               BIT(31)
 
 /*****************************************************************************/
 
-#if IS_ENABLED(CONFIG_SUN50I_GEN_H6)
+#if IS_ENABLED(CONFIG_MACH_SUN60I_A733)
+#define CCM_BASE                    0x02002000
+#elif IS_ENABLED(CONFIG_SUN50I_GEN_H6)
 #define CCM_BASE                    0x03001000
 #elif IS_ENABLED(CONFIG_SUNXI_GEN_NCAT2)
 #define CCM_BASE                    0x02001000
@@ -86,10 +95,14 @@
 #endif
 
 #define CCM_AHB_GATING0             (CCM_BASE + 0x60)
+#if IS_ENABLED(CONFIG_MACH_SUN60I_A733)
+#define CCM_H6_SPI_BGR_REG          (CCM_BASE + 0x0f04)
+#define CCM_SPI0_CLK                (CCM_BASE + 0x0f00)
+#elif IS_ENABLED(CONFIG_SUN50I_GEN_H6) || IS_ENABLED(CONFIG_SUNXI_GEN_NCAT2)
 #define CCM_H6_SPI_BGR_REG          (CCM_BASE + 0x96c)
-#if IS_ENABLED(CONFIG_SUN50I_GEN_H6) || IS_ENABLED(CONFIG_SUNXI_GEN_NCAT2)
 #define CCM_SPI0_CLK                (CCM_BASE + 0x940)
 #else
+#define CCM_H6_SPI_BGR_REG          (CCM_BASE + 0x96c)
 #define CCM_SPI0_CLK                (CCM_BASE + 0xA0)
 #endif
 #define SUN6I_BUS_SOFT_RST_REG0     (CCM_BASE + 0x2C0)
@@ -110,6 +123,22 @@
  */
 static void spi0_pinmux_setup(unsigned int pin_function)
 {
+	if (IS_ENABLED(CONFIG_MACH_SUN60I_A733)) {
+		if (pin_function == SUNXI_GPIO_DISABLE) {
+			sunxi_gpio_set_cfgpin(SUNXI_GPC(2), SUNXI_GPIO_DISABLE);
+			sunxi_gpio_set_cfgpin(SUNXI_GPC(3), SUNXI_GPIO_DISABLE);
+			sunxi_gpio_set_cfgpin(SUNXI_GPC(4), SUNXI_GPIO_DISABLE);
+			sunxi_gpio_set_cfgpin(SUNXI_GPC(12), SUNXI_GPIO_DISABLE);
+		} else {
+			sunxi_gpio_set_cfgpin(SUNXI_GPC(2), 5);
+			sunxi_gpio_set_cfgpin(SUNXI_GPC(3), 5);
+			sunxi_gpio_set_cfgpin(SUNXI_GPC(4), 5);
+			sunxi_gpio_set_cfgpin(SUNXI_GPC(12), 5);
+			sunxi_gpio_set_pull(SUNXI_GPC(3), SUNXI_GPIO_PULL_UP);
+		}
+		return;
+	}
+
 	/* All chips use PC2. And all chips use PC0, except R528/T113 */
 	if (!IS_ENABLED(CONFIG_MACH_SUN8I_R528))
 		sunxi_gpio_set_cfgpin(SUNXI_GPC(0), pin_function);
@@ -141,11 +170,15 @@ static bool is_sun6i_gen_spi(void)
 	return IS_ENABLED(CONFIG_SUNXI_GEN_SUN6I) ||
 	       IS_ENABLED(CONFIG_SUN50I_GEN_H6) ||
 	       IS_ENABLED(CONFIG_SUNXI_GEN_NCAT2) ||
+	       IS_ENABLED(CONFIG_MACH_SUN60I_A733) ||
 	       IS_ENABLED(CONFIG_MACH_SUN8I_V3S);
 }
 
 static uintptr_t spi0_base_address(void)
 {
+	if (IS_ENABLED(CONFIG_MACH_SUN60I_A733))
+		return 0x02540000;
+
 	if (IS_ENABLED(CONFIG_MACH_SUN8I_R40))
 		return 0x01C05000;
 
@@ -160,6 +193,29 @@ static uintptr_t spi0_base_address(void)
 		return 0x01C05000;
 
 	return 0x01C68000;
+}
+
+static void sunxi_spi0_set_cs(uintptr_t base, bool enable)
+{
+	if (is_sun6i_gen_spi()) {
+		if (enable)
+			clrsetbits_le32(base + SUN6I_SPI0_TCR, SUN6I_TCR_CS_LEVEL,
+					SUN6I_TCR_CS_MANUAL | SUN6I_TCR_CS_ACTIVE_LOW);
+		else
+			setbits_le32(base + SUN6I_SPI0_TCR,
+				     SUN6I_TCR_CS_LEVEL | SUN6I_TCR_CS_MANUAL | SUN6I_TCR_CS_ACTIVE_LOW);
+		udelay(1);
+	}
+}
+
+static void sunxi_spi0_reset_fifo(uintptr_t base)
+{
+	if (is_sun6i_gen_spi()) {
+		setbits_le32(base + SUN6I_SPI0_FIFO_CTL, SUN6I_FIFO_CTL_RF_RST | SUN6I_FIFO_CTL_TF_RST);
+		int to = 1000;
+		while ((readl(base + SUN6I_SPI0_FIFO_CTL) & (SUN6I_FIFO_CTL_RF_RST | SUN6I_FIFO_CTL_TF_RST)) && --to)
+			udelay(1);
+	}
 }
 
 /*
@@ -194,8 +250,11 @@ static void spi0_enable_clock(void)
 			       SUN4I_SPI0_CCTL));
 		}
 
-		/* 24MHz from OSC24M */
-		writel((1 << 31), CCM_SPI0_CLK);
+		/* 6MHz from OSC24M for A733 (div=3), 24MHz for others */
+		if (IS_ENABLED(CONFIG_MACH_SUN60I_A733))
+			writel((1 << 31) | 3, CCM_SPI0_CLK);
+		else
+			writel((1 << 31), CCM_SPI0_CLK);
 	}
 
 	if (is_sun6i_gen_spi()) {
@@ -207,12 +266,13 @@ static void spi0_enable_clock(void)
 			;
 
 		/*
-		 * For new SoCs we should configure sample mode depending on
-		 * input clock. As 24MHz from OSC24M is used, we could use
-		 * normal sample mode by setting SDM bit in the TCR register
+		 * Set manual CS mode, active low, CS_LEVEL high (deselected).
+		 * NCAT2 uses SDM; A733 operates reliably at 6MHz without SDM.
 		 */
-		if (IS_ENABLED(CONFIG_SUNXI_GEN_NCAT2))
-			setbits_le32(base + SUN6I_SPI0_TCR, SUN6I_TCR_SDM);
+		u32 tcr = SUN6I_TCR_CS_MANUAL | SUN6I_TCR_CS_ACTIVE_LOW | SUN6I_TCR_CS_LEVEL;
+		if (IS_ENABLED(CONFIG_SUNXI_GEN_NCAT2) && !IS_ENABLED(CONFIG_MACH_SUN60I_A733))
+			tcr |= SUN6I_TCR_SDM;
+		clrsetbits_le32(base + SUN6I_SPI0_TCR, BIT(11), tcr);
 	} else {
 		/* Enable SPI in the master mode and reset FIFO */
 		setbits_le32(base + SUN4I_SPI0_CTL, SUN4I_CTL_MASTER |
@@ -252,7 +312,9 @@ static void spi0_disable_clock(void)
 			     (1 << AHB_RESET_SPI0_SHIFT));
 }
 
-static void spi0_init(void)
+static void sunxi_spi0_check_protection(void);
+
+void spi0_init(void)
 {
 	unsigned int pin_function = SUNXI_GPC_SPI0;
 
@@ -265,15 +327,18 @@ static void spi0_init(void)
 
 	spi0_pinmux_setup(pin_function);
 	spi0_enable_clock();
+	sunxi_spi0_check_protection();
 }
 
-static void spi0_deinit(void)
+void spi0_deinit(void)
 {
 	/* New SoCs can disable pins, older could only set them as input */
 	unsigned int pin_function = SUNXI_GPIO_INPUT;
 
-	if (is_sun6i_gen_spi())
+	if (is_sun6i_gen_spi()) {
 		pin_function = SUNXI_GPIO_DISABLE;
+		sunxi_spi0_set_cs(spi0_base_address(), false);
+	}
 
 	spi0_disable_clock();
 	spi0_pinmux_setup(pin_function);
@@ -322,7 +387,7 @@ static void sunxi_spi0_read_data(u8 *buf, u32 addr, u32 bufsize,
 	udelay(1);
 }
 
-static void spi0_read_data(void *buf, u32 addr, u32 len)
+void spi0_read_data(void *buf, u32 addr, u32 len)
 {
 	u8 *buf8 = buf;
 	u32 chunk_len;
@@ -334,6 +399,8 @@ static void spi0_read_data(void *buf, u32 addr, u32 len)
 			chunk_len = SPI_READ_MAX_SIZE;
 
 		if (is_sun6i_gen_spi()) {
+			sunxi_spi0_reset_fifo(base);
+			sunxi_spi0_set_cs(base, true);
 			sunxi_spi0_read_data(buf8, addr, chunk_len,
 					     base + SUN6I_SPI0_TCR,
 					     SUN6I_TCR_XCH,
@@ -343,6 +410,7 @@ static void spi0_read_data(void *buf, u32 addr, u32 len)
 					     base + SUN6I_SPI0_MBC,
 					     base + SUN6I_SPI0_MTC,
 					     base + SUN6I_SPI0_BCC);
+			sunxi_spi0_set_cs(base, false);
 		} else {
 			sunxi_spi0_read_data(buf8, addr, chunk_len,
 					     base + SUN4I_SPI0_CTL,
@@ -359,6 +427,202 @@ static void spi0_read_data(void *buf, u32 addr, u32 len)
 		buf8 += chunk_len;
 		addr += chunk_len;
 	}
+}
+
+static void sunxi_spi0_xfer_cmd(u8 cmd)
+{
+	uintptr_t base = spi0_base_address();
+
+	if (is_sun6i_gen_spi()) {
+		int to = 100000;
+		sunxi_spi0_reset_fifo(base);
+		sunxi_spi0_set_cs(base, true);
+		writel(1, base + SUN6I_SPI0_MBC);
+		writel(1, base + SUN6I_SPI0_MTC);
+		writel(1, base + SUN6I_SPI0_BCC);
+		writeb(cmd, base + SUN6I_SPI0_TXD);
+		setbits_le32(base + SUN6I_SPI0_TCR, SUN6I_TCR_XCH);
+		while ((readl(base + SUN6I_SPI0_TCR) & SUN6I_TCR_XCH) && --to)
+			udelay(1);
+		to = 100000;
+		while (((readl(base + SUN6I_SPI0_FIFO_STA) & 0x7f) < 1) && --to)
+			udelay(1);
+		sunxi_spi0_set_cs(base, false);
+		sunxi_spi0_reset_fifo(base);
+	}
+	udelay(1);
+}
+
+static u8 sunxi_spi0_read_status(void)
+{
+	uintptr_t base = spi0_base_address();
+	u8 status = 0;
+
+	if (is_sun6i_gen_spi()) {
+		int to = 100000;
+		sunxi_spi0_reset_fifo(base);
+		sunxi_spi0_set_cs(base, true);
+		writel(2, base + SUN6I_SPI0_MBC);
+		writel(1, base + SUN6I_SPI0_MTC);
+		writel(1, base + SUN6I_SPI0_BCC);
+		writeb(0x05, base + SUN6I_SPI0_TXD);
+		setbits_le32(base + SUN6I_SPI0_TCR, SUN6I_TCR_XCH);
+		while ((readl(base + SUN6I_SPI0_TCR) & SUN6I_TCR_XCH) && --to)
+			udelay(1);
+		to = 100000;
+		while (((readl(base + SUN6I_SPI0_FIFO_STA) & 0x7f) < 2) && --to)
+			udelay(1);
+		if (to) {
+			readb(base + SUN6I_SPI0_RXD);
+			status = readb(base + SUN6I_SPI0_RXD);
+		}
+		sunxi_spi0_set_cs(base, false);
+		sunxi_spi0_reset_fifo(base);
+	}
+	udelay(1);
+	return status;
+}
+
+static int sunxi_spi0_wait_ready(void)
+{
+	int to = 200000;
+	while ((sunxi_spi0_read_status() & 1) && --to)
+		udelay(10);
+	return to ? 0 : -ETIMEDOUT;
+}
+
+static void sunxi_spi0_check_protection(void)
+{
+	uintptr_t base = spi0_base_address();
+	u8 s1;
+
+	if (!is_sun6i_gen_spi())
+		return;
+
+	/* Read Status 1 (0x05) */
+	s1 = sunxi_spi0_read_status();
+
+	/* If BP0, BP1, BP2 bits are set (bits 2..5), clear flash write protection */
+	if (s1 & 0x3c) {
+		/* Read Status 2 (0x35) */
+		sunxi_spi0_reset_fifo(base);
+		sunxi_spi0_set_cs(base, true);
+		writel(2, base + SUN6I_SPI0_MBC);
+		writel(1, base + SUN6I_SPI0_MTC);
+		writel(1, base + SUN6I_SPI0_BCC);
+		writeb(0x35, base + SUN6I_SPI0_TXD);
+		setbits_le32(base + SUN6I_SPI0_TCR, SUN6I_TCR_XCH);
+		while (readl(base + SUN6I_SPI0_TCR) & SUN6I_TCR_XCH)
+			;
+		while ((readl(base + SUN6I_SPI0_FIFO_STA) & 0x7f) < 2)
+			;
+		readb(base + SUN6I_SPI0_RXD);
+		u8 s2 = readb(base + SUN6I_SPI0_RXD);
+		sunxi_spi0_set_cs(base, false);
+		sunxi_spi0_reset_fifo(base);
+
+		/* Clear BP bits while preserving Status 2 */
+		sunxi_spi0_xfer_cmd(0x06); /* WREN */
+		sunxi_spi0_reset_fifo(base);
+		sunxi_spi0_set_cs(base, true);
+		writel(3, base + SUN6I_SPI0_MBC);
+		writel(3, base + SUN6I_SPI0_MTC);
+		writel(3, base + SUN6I_SPI0_BCC);
+		writeb(0x01, base + SUN6I_SPI0_TXD); /* Write Status */
+		writeb(0x00, base + SUN6I_SPI0_TXD); /* Status 1 = 0x00 (clear BP bits) */
+		writeb(s2, base + SUN6I_SPI0_TXD);   /* Preserve Status 2 (QE) */
+		setbits_le32(base + SUN6I_SPI0_TCR, SUN6I_TCR_XCH);
+		while (readl(base + SUN6I_SPI0_TCR) & SUN6I_TCR_XCH)
+			;
+		sunxi_spi0_set_cs(base, false);
+		sunxi_spi0_reset_fifo(base);
+		sunxi_spi0_wait_ready();
+	}
+}
+
+int spi0_erase_sector(u32 addr)
+{
+	uintptr_t base = spi0_base_address();
+	int to = 100000;
+
+	if (!is_sun6i_gen_spi())
+		return -ENOSYS;
+
+	sunxi_spi0_wait_ready();
+	sunxi_spi0_xfer_cmd(0x06); /* WREN */
+
+	sunxi_spi0_reset_fifo(base);
+	sunxi_spi0_set_cs(base, true);
+	writel(4, base + SUN6I_SPI0_MBC);
+	writel(4, base + SUN6I_SPI0_MTC);
+	writel(4, base + SUN6I_SPI0_BCC);
+	writeb(0x20, base + SUN6I_SPI0_TXD); /* 4KB Sector Erase */
+	writeb((u8)(addr >> 16), base + SUN6I_SPI0_TXD);
+	writeb((u8)(addr >> 8), base + SUN6I_SPI0_TXD);
+	writeb((u8)(addr), base + SUN6I_SPI0_TXD);
+	setbits_le32(base + SUN6I_SPI0_TCR, SUN6I_TCR_XCH);
+	while ((readl(base + SUN6I_SPI0_TCR) & SUN6I_TCR_XCH) && --to)
+		udelay(1);
+	to = 100000;
+	while (((readl(base + SUN6I_SPI0_FIFO_STA) & 0x7f) < 4) && --to)
+		udelay(1);
+	sunxi_spi0_set_cs(base, false);
+	sunxi_spi0_reset_fifo(base);
+	udelay(1);
+
+	return sunxi_spi0_wait_ready();
+}
+
+int spi0_write_data(u32 addr, const void *buf, u32 len)
+{
+	uintptr_t base = spi0_base_address();
+	const u8 *p = buf;
+
+	if (!is_sun6i_gen_spi())
+		return -ENOSYS;
+
+	while (len > 0) {
+		int to = 100000;
+		u32 page_offset = addr & 0xff;
+		u32 chunk = 256 - page_offset;
+		if (chunk > len)
+			chunk = len;
+		if (chunk > 60)
+			chunk = 60; /* FIFO limit */
+
+		sunxi_spi0_wait_ready();
+		sunxi_spi0_xfer_cmd(0x06); /* WREN */
+
+		sunxi_spi0_reset_fifo(base);
+		sunxi_spi0_set_cs(base, true);
+		writel(4 + chunk, base + SUN6I_SPI0_MBC);
+		writel(4 + chunk, base + SUN6I_SPI0_MTC);
+		writel(4 + chunk, base + SUN6I_SPI0_BCC);
+		writeb(0x02, base + SUN6I_SPI0_TXD); /* Page Program */
+		writeb((u8)(addr >> 16), base + SUN6I_SPI0_TXD);
+		writeb((u8)(addr >> 8), base + SUN6I_SPI0_TXD);
+		writeb((u8)(addr), base + SUN6I_SPI0_TXD);
+		for (u32 i = 0; i < chunk; i++)
+			writeb(*p++, base + SUN6I_SPI0_TXD);
+
+		setbits_le32(base + SUN6I_SPI0_TCR, SUN6I_TCR_XCH);
+		while ((readl(base + SUN6I_SPI0_TCR) & SUN6I_TCR_XCH) && --to)
+			udelay(1);
+		to = 100000;
+		while (((readl(base + SUN6I_SPI0_FIFO_STA) & 0x7f) < (4 + chunk)) && --to)
+			udelay(1);
+		sunxi_spi0_set_cs(base, false);
+		sunxi_spi0_reset_fifo(base);
+		udelay(1);
+
+		if (sunxi_spi0_wait_ready())
+			return -ETIMEDOUT;
+
+		addr += chunk;
+		len -= chunk;
+	}
+
+	return 0;
 }
 
 static ulong spi_load_read(struct spl_load_info *load, ulong sector,
@@ -385,8 +649,8 @@ static int spl_spi_load_image(struct spl_image_info *spl_image,
 
 	spi0_read_data((void *)header, load_offset, 0x40);
 
-        if (IS_ENABLED(CONFIG_SPL_LOAD_FIT) &&
-		image_get_magic(header) == FDT_MAGIC) {
+	if (IS_ENABLED(CONFIG_SPL_LOAD_FIT) &&
+	    image_get_magic(header) == FDT_MAGIC) {
 		struct spl_load_info load;
 
 		debug("Found FIT image\n");
@@ -406,5 +670,7 @@ static int spl_spi_load_image(struct spl_image_info *spl_image,
 
 	return ret;
 }
+
 /* Use priorty 0 to override the default if it happens to be linked in */
 SPL_LOAD_IMAGE_METHOD("sunxi SPI", 0, BOOT_DEVICE_SPI, spl_spi_load_image);
+

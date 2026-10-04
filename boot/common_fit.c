@@ -39,14 +39,17 @@ int fit_find_config_node(const void *fdt)
 	const char *dflt_conf_desc = NULL;
 	int dflt_conf_node = -ENOENT;
 
+	printf("SPL: fit_find_config_node: fdt=0x%lx magic=0x%08x totalsize=%u\n",
+	       (ulong)fdt, fdt ? fdt_magic(fdt) : 0, fdt ? fdt_totalsize(fdt) : 0);
 	conf = fdt_path_offset(fdt, FIT_CONFS_PATH);
+	printf("SPL: fit_find_config_node: conf=%d\n", conf);
 	if (conf < 0) {
-		debug("%s: Cannot find /configurations node: %d\n", __func__,
-		      conf);
+		printf("SPL: Cannot find /configurations node: %d\n", conf);
 		return -EINVAL;
 	}
 
 	dflt_conf_name = fdt_getprop(fdt, conf, FIT_DEFAULT_PROP, &len);
+	printf("SPL: fit_find_config_node: dflt_conf_name='%s'\n", dflt_conf_name ? dflt_conf_name : "NULL");
 
 	for (node = fdt_first_subnode(fdt, conf);
 	     node >= 0;

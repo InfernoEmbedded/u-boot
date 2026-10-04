@@ -601,28 +601,13 @@ int dram_init(void)
 {
 	struct boot_file_head *spl = get_spl_header(SPL_DRAM_HEADER_VERSION);
 
-	if (spl != INVALID_SPL_HEADER && spl->dram_size) {
+	if (spl != INVALID_SPL_HEADER && spl->dram_size)
 		gd->ram_size = (phys_addr_t)spl->dram_size << 20;
-#if defined(CONFIG_MACH_SUN60I_A733)
-	} else if (IS_ENABLED(CONFIG_MACH_SUN60I_A733)) {
-		const u32 *boot_data = (const u32 *)CONFIG_TEXT_BASE;
-		u32 dram_scan_size = boot_data[0x4f8 / 4];
-
-		if (dram_scan_size >= 512 && dram_scan_size <= 32768)
-			gd->ram_size = (phys_addr_t)dram_scan_size << 20;
-		else
-			gd->ram_size = get_ram_size((long *)PHYS_SDRAM_0, PHYS_SDRAM_0_SIZE);
-#endif
-	} else {
+	else
 		gd->ram_size = get_ram_size((long *)PHYS_SDRAM_0, PHYS_SDRAM_0_SIZE);
-	}
 
 	if (gd->ram_size > CONFIG_SUNXI_DRAM_MAX_SIZE)
 		gd->ram_size = CONFIG_SUNXI_DRAM_MAX_SIZE;
-
-#if defined(CONFIG_MACH_SUN60I_A733)
-	gd->flags |= GD_FLG_SKIP_RELOC;
-#endif
 
 	return 0;
 }
@@ -790,7 +775,7 @@ static void mmc_pinmux_setup(int sdc)
 			sunxi_gpio_set_drv(pin, 2);
 		}
 #elif defined(CONFIG_MACH_SUN50I_H616) || defined(CONFIG_MACH_SUN50I_A133) || \
-      defined(CONFIG_MACH_SUN55I_A523)
+      defined(CONFIG_MACH_SUN55I_A523) || defined(CONFIG_MACH_SUN60I_A733)
 		/* SDC2: PC0-PC1, PC5-PC6, PC8-PC11, PC13-PC16 */
 		for (pin = SUNXI_GPC(0); pin <= SUNXI_GPC(16); pin++) {
 			if (pin > SUNXI_GPC(1) && pin < SUNXI_GPC(5))
@@ -888,18 +873,31 @@ int mmc_get_env_dev(void)
 
 #ifdef CONFIG_XPL_BUILD
 
+void *board_spl_fit_buffer_addr(ulong fit_size, int sectors, int bl_len)
+{
+	printf("SPL: board_spl_fit_buffer_addr: fit_size=%lu sectors=%d bl_len=%d -> buffer @ 0x44000000\n",
+	       fit_size, sectors, bl_len);
+	return (void *)0x44000000;
+}
+
 static void sunxi_spl_store_dram_size(phys_addr_t dram_size)
 {
+	printf("SPL: sunxi_spl_store_dram_size starting...\n");
 	struct boot_file_head *spl = get_spl_header(SPL_DT_HEADER_VERSION);
 
-	if (spl == INVALID_SPL_HEADER)
+	if (spl == INVALID_SPL_HEADER) {
+		printf("SPL: get_spl_header returned INVALID_SPL_HEADER\n");
 		return;
+	}
 
+	printf("SPL: spl header valid, signature: %.4s\n", spl->spl_signature);
 	/* Promote the header version for U-Boot proper, if needed. */
 	if (spl->spl_signature[3] < SPL_DRAM_HEADER_VERSION)
 		spl->spl_signature[3] = SPL_DRAM_HEADER_VERSION;
 
 	spl->dram_size = dram_size >> 20;
+	printf("SPL: header dram_size stored: %u MiB\n", spl->dram_size);
+	printf("SPL: sunxi_spl_store_dram_size finished\n");
 }
 
 static void status_led_init(void)
@@ -1037,14 +1035,33 @@ void sunxi_board_init(void)
 
 	sunxi_spl_store_dram_size(gd->ram_size);
 
+	printf("SPL: probing DRAM @ 0x40800000...\n");
+	volatile u32 *p40 = (volatile u32 *)0x40800000;
+	*p40 = 0x12345678;
+	printf("SPL: 0x40800000 readback: 0x%08x\n", *p40);
+
+	printf("SPL: probing DRAM @ 0x4fe00000 (STACK_R)...\n");
+	volatile u32 *p4fe = (volatile u32 *)0x4fe00000;
+	*p4fe = 0x87654321;
+	printf("SPL: 0x4fe00000 readback: 0x%08x\n", *p4fe);
+
+	printf("SPL: probing DRAM @ 0x4ff80000 (BSS)...\n");
+	volatile u32 *pbss = (volatile u32 *)0x4ff80000;
+	*pbss = 0xdeadbeef;
+	printf("SPL: 0x4ff80000 readback: 0x%08x\n", *pbss);
+
 	/*
 	 * Only clock up the CPU to full speed if we are reasonably
 	 * assured it's being powered with suitable core voltage
 	 */
-	if (!power_failed)
+	if (!power_failed) {
+		printf("SPL: calling clock_set_pll1...\n");
 		clock_set_pll1(get_board_sys_clk());
-	else
+		printf("SPL: clock_set_pll1 done\n");
+	} else {
 		printf("Failed to set core voltage! Can't set CPU frequency\n");
+	}
+	printf("SPL: sunxi_board_init completed!\n");
 }
 #endif /* CONFIG_XPL_BUILD */
 
@@ -1387,6 +1404,9 @@ int board_fit_config_name_match(const char *name)
 	if (best_dt_name == NULL)
 		best_dt_name = CONFIG_DEFAULT_DEVICE_TREE;
 #endif
+
+	printf("SPL: board_fit_config_name_match: name='%s' best_dt_name='%s'\n",
+	       name ? name : "NULL", best_dt_name ? best_dt_name : "NULL");
 
 	if (best_dt_name == NULL) {
 		/* No DT name was provided, so accept the first config. */

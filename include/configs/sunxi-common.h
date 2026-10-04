@@ -56,7 +56,11 @@
 
 #define CFG_SYS_INIT_RAM_ADDR	CONFIG_SUNXI_SRAM_ADDRESS
 /* FIXME: this may be larger on some SoCs */
+#if defined(CONFIG_MACH_SUN60I_A733)
+#define CFG_SYS_INIT_RAM_SIZE	0x4FF00 /* Keep stack within 320KB SRAM */
+#else
 #define CFG_SYS_INIT_RAM_SIZE	0x8000 /* 32 KiB */
+#endif
 
 #define PHYS_SDRAM_0			CFG_SYS_SDRAM_BASE
 #define PHYS_SDRAM_0_SIZE		0x80000000 /* 2 GiB */

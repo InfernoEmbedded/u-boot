@@ -58,7 +58,7 @@
 &mmc0 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&mmc0_pins>;
-	vmmc-supply = <&reg_dldo1>;
+	vmmc-supply = <&reg_dc1sw2>;
 	cd-gpios = <&pio 5 6 GPIO_ACTIVE_LOW>; /* PF6 */
 	broken-cd;
 	bus-width = <4>;
@@ -117,7 +117,7 @@
 			};
 
 			reg_dc1sw2: dc1sw2 {
-				regulator-name = "vcc-gmac-io";
+				regulator-name = "vcc-card";
 				regulator-min-microvolt = <3300000>;
 				regulator-max-microvolt = <3300000>;
 				regulator-always-on;

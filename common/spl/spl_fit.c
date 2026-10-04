@@ -730,7 +730,10 @@ static int spl_simple_fit_read(struct spl_fit_info *ctx,
 		return -EIO;
 	}
 
+	printf("SPL: spl_simple_fit_read: calling info->read for %lu bytes to 0x%lx\n", size, (ulong)buf);
 	count = info->read(info, offset, size, buf);
+	printf("SPL: spl_simple_fit_read: info->read returned count=%lu (fdt_magic=0x%08x totalsize=%u)\n",
+	       count, buf ? fdt_magic(buf) : 0, buf ? fdt_totalsize(buf) : 0);
 	if (!count) {
 		/*
 		 * FIT could not be read. This means we should free the
@@ -804,7 +807,9 @@ int spl_load_simple_fit(struct spl_image_info *spl_image,
 	int index = 0;
 	int firmware_node;
 
+	printf("SPL: spl_load_simple_fit: offset=0x%lx, fit_header=0x%lx\n", offset, (ulong)fit);
 	ret = spl_simple_fit_read(&ctx, info, offset, fit);
+	printf("SPL: spl_simple_fit_read returned %d, ctx.fit=0x%lx\n", ret, (ulong)ctx.fit);
 	if (ret < 0)
 		return ret;
 
@@ -814,7 +819,10 @@ int spl_load_simple_fit(struct spl_image_info *spl_image,
 
 	ctx.fit = spl_load_simple_fit_fix_load(ctx.fit);
 
+	printf("SPL: calling spl_simple_fit_parse(ctx.fit=0x%lx)...\n", (ulong)ctx.fit);
 	ret = spl_simple_fit_parse(&ctx);
+	printf("SPL: spl_simple_fit_parse returned %d, conf_node=%d, images_node=%d\n",
+	       ret, ctx.conf_node, ctx.images_node);
 	if (ret < 0)
 		return ret;
 
@@ -842,14 +850,18 @@ int spl_load_simple_fit(struct spl_image_info *spl_image,
 		 */
 		index = 1;
 	}
+	printf("SPL: selected image node=%d (name='%s')\n", node,
+	       node >= 0 ? fit_get_name(ctx.fit, node, NULL) : "NONE");
 	if (node < 0) {
-		debug("%s: Cannot find u-boot image node: %d\n",
+		printf("%s: Cannot find u-boot image node: %d\n",
 		      __func__, node);
 		return -1;
 	}
 
 	/* Load the image and set up the spl_image structure */
+	printf("SPL: loading node %d via load_simple_fit...\n", node);
 	ret = load_simple_fit(info, offset, &ctx, node, spl_image);
+	printf("SPL: load_simple_fit returned %d\n", ret);
 	if (ret)
 		return ret;
 

@@ -206,6 +206,17 @@ static int mmc_update_clk(struct sunxi_mmc_priv *priv)
 static int mmc_config_clock(struct sunxi_mmc_priv *priv, struct mmc *mmc)
 {
 	unsigned rval = readl(&priv->reg->clkcr);
+	unsigned int clock = mmc->clock;
+
+	/* In SPL, cap the clock to avoid signal integrity issues. */
+	#ifdef CONFIG_XPL_BUILD
+	if ((IS_ENABLED(CONFIG_MACH_SUN55I_A523) ||
+	     IS_ENABLED(CONFIG_MACH_SUN60I_A733)) && clock > 12000000)
+		clock = 12000000;
+	#endif
+
+	debug("mmc %u config_clock req %u actual %u\n", priv->mmc_no,
+	      mmc->clock, clock);
 
 	/* Disable Clock */
 	rval &= ~SUNXI_MMC_CLK_ENABLE;
@@ -213,12 +224,27 @@ static int mmc_config_clock(struct sunxi_mmc_priv *priv, struct mmc *mmc)
 	if (mmc_update_clk(priv))
 		return -1;
 
+	/*
+	 * The A523/A733 cannot use CCLK_DIV=0 (it is undefined), so the internal
+	 * divider is forced to /2 below. That halves the internal clock, so
+	 * request twice the rate from the module clock to keep the actual
+	 * card clock in line with mmc->clock. This compensates every branch
+	 * and build mode where the divider is applied.
+	 */
+	if (IS_ENABLED(CONFIG_MACH_SUN55I_A523) ||
+	    IS_ENABLED(CONFIG_MACH_SUN60I_A733))
+		clock *= 2;
+
 	/* Set mod_clk to new rate */
-	if (mmc_set_mod_clk(priv, mmc->clock))
+	if (mmc_set_mod_clk(priv, clock))
 		return -1;
 
 	/* Clear internal divider */
 	rval &= ~SUNXI_MMC_CLK_DIVIDER_MASK;
+	/* On A523/A733 CCLK_DIV=0 is undefined; use /2. */
+	if (IS_ENABLED(CONFIG_MACH_SUN55I_A523) ||
+	    IS_ENABLED(CONFIG_MACH_SUN60I_A733))
+		rval |= 1;
 	writel(rval, &priv->reg->clkcr);
 
 #if defined(CONFIG_SUNXI_GEN_SUN6I) || defined(CONFIG_SUN50I_GEN_H6) || defined(CONFIG_SUNXI_GEN_NCAT2)
@@ -285,43 +311,27 @@ static int mmc_trans_data_by_cpu(struct sunxi_mmc_priv *priv, struct mmc *mmc,
 
 	start = get_timer(0);
 
-	for (i = 0; i < word_cnt;) {
-		unsigned int in_fifo;
+	for (i = 0; i < word_cnt; i++) {
+		if (get_timer(start) > timeout_msecs) {
+			printf("SPL: mmc trans timeout at word %u/%u (status=0x%08x rint=0x%08x)\n",
+			       i, word_cnt, readl(&priv->reg->status), readl(&priv->reg->rint));
+			return -1;
+		}
 
 		while ((status = readl(&priv->reg->status)) & status_bit) {
-			if (get_timer(start) > timeout_msecs)
+			if (get_timer(start) > timeout_msecs) {
+				printf("SPL: mmc wait status timeout at word %u/%u (status=0x%08x rint=0x%08x)\n",
+				       i, word_cnt, status, readl(&priv->reg->rint));
 				return -1;
+			}
 		}
 
-		/*
-		 * For writing we do not easily know the FIFO size, so have
-		 * to check the FIFO status after every word written.
-		 * TODO: For optimisation we could work out a minimum FIFO
-		 * size across all SoCs, and use that together with the current
-		 * fill level to write chunks of words.
-		 */
-		if (!reading) {
-			writel(buff[i++], &priv->reg->fifo);
-			continue;
-		}
-
-		/*
-		 * The status register holds the current FIFO level, so we
-		 * can be sure to collect as many words from the FIFO
-		 * register without checking the status register after every
-		 * read. That saves half of the costly MMIO reads, effectively
-		 * doubling the read performance.
-		 * Some SoCs (A20) report a level of 0 if the FIFO is
-		 * completely full (value masked out?). Use a safe minimal
-		 * FIFO size in this case.
-		 */
-		in_fifo = SUNXI_MMC_STATUS_FIFO_LEVEL(status);
-		if (in_fifo == 0 && (status & SUNXI_MMC_STATUS_FIFO_FULL))
-			in_fifo = 32;
-		for (; in_fifo > 0; in_fifo--)
-			buff[i++] = readl_relaxed(&priv->reg->fifo);
-		dmb();
+		if (reading)
+			buff[i] = readl_relaxed(&priv->reg->fifo);
+		else
+			writel(buff[i], &priv->reg->fifo);
 	}
+	dmb();
 
 	return 0;
 }
@@ -409,25 +419,32 @@ static int sunxi_mmc_send_cmd_common(struct sunxi_mmc_priv *priv,
 			error = readl(&priv->reg->rint) &
 				SUNXI_MMC_RINT_INTERRUPT_ERROR_BIT;
 			error = -ETIMEDOUT;
+			printf("SPL: mmc_trans_data_by_cpu failed: ret=%d error=%d rint=0x%08x\n",
+			       ret, error, readl(&priv->reg->rint));
 			goto out;
 		}
 	}
 
 	error = mmc_rint_wait(priv, mmc, 1000, SUNXI_MMC_RINT_COMMAND_DONE,
 			      "cmd");
-	if (error)
+	if (error) {
+		printf("SPL: mmc_rint_wait cmd %d failed: %d\n", cmd->cmdidx, error);
 		goto out;
+	}
 
 	if (data) {
-		timeout_msecs = 120;
+		timeout_msecs = max(2000U, (data->blocks * data->blocksize) >> 7);
 		debug("cacl timeout %x msec\n", timeout_msecs);
 		error = mmc_rint_wait(priv, mmc, timeout_msecs,
 				      data->blocks > 1 ?
 				      SUNXI_MMC_RINT_AUTO_COMMAND_DONE :
 				      SUNXI_MMC_RINT_DATA_OVER,
 				      "data");
-		if (error)
+		if (error) {
+			printf("SPL: mmc_rint_wait data (blocks=%d) failed: %d rint=0x%08x\n",
+			       data->blocks, error, readl(&priv->reg->rint));
 			goto out;
+		}
 	}
 
 	if (cmd->resp_type & MMC_RSP_BUSY) {
@@ -575,7 +592,16 @@ struct mmc *sunxi_mmc_init(int sdc_no)
 	cfg->ops  = &sunxi_mmc_ops;
 
 	cfg->voltages = MMC_VDD_32_33 | MMC_VDD_33_34;
-	cfg->host_caps = MMC_MODE_4BIT;
+	#ifdef CONFIG_XPL_BUILD
+	if (IS_ENABLED(CONFIG_MACH_SUN55I_A523) ||
+	    IS_ENABLED(CONFIG_MACH_SUN60I_A733))
+		cfg->host_caps = 0;
+	else
+	#endif
+		cfg->host_caps = MMC_MODE_4BIT;
+
+	debug("mmc %u sdc %d host_caps initial %x\n", priv->mmc_no, sdc_no,
+	      cfg->host_caps);
 
 	if ((IS_ENABLED(CONFIG_MACH_SUN50I) || IS_ENABLED(CONFIG_MACH_SUN8I) ||
 	    IS_ENABLED(CONFIG_SUN50I_GEN_H6) || IS_ENABLED(CONFIG_MACH_SUN55I_A523) ||
@@ -583,11 +609,38 @@ struct mmc *sunxi_mmc_init(int sdc_no)
 	    (sdc_no == 2))
 		cfg->host_caps = MMC_MODE_8BIT;
 
-	cfg->host_caps |= MMC_MODE_HS_52MHz | MMC_MODE_HS;
-	cfg->b_max = CONFIG_SYS_MMC_MAX_BLK_COUNT;
+	#ifdef CONFIG_XPL_BUILD
+	if (IS_ENABLED(CONFIG_MACH_SUN55I_A523) ||
+	    IS_ENABLED(CONFIG_MACH_SUN60I_A733)) {
+		/*
+		 * Avoid high-speed modes and limit the clock to keep the
+		 * SPL reads reliable on this controller.
+		 */
+		cfg->b_max = 256;
+		cfg->f_min = 400000;
+		cfg->f_max = 12000000;
+	} else
+	#endif
+	{
+		cfg->host_caps |= MMC_MODE_HS_52MHz | MMC_MODE_HS;
+		cfg->b_max = CONFIG_SYS_MMC_MAX_BLK_COUNT;
+		cfg->f_min = 400000;
+		if ((IS_ENABLED(CONFIG_MACH_SUN55I_A523) ||
+		     IS_ENABLED(CONFIG_MACH_SUN60I_A733)) && sdc_no == 2) {
+			/*
+			 * eMMC block reads are still unreliable at the full
+			 * HS clock in U-Boot proper, so keep the same
+			 * conservative clock the SPL uses.
+			 */
+			cfg->host_caps &= ~(MMC_MODE_HS_52MHz | MMC_MODE_HS);
+			cfg->f_max = 12000000;
+		} else {
+			cfg->f_max = 52000000;
+		}
+	}
 
-	cfg->f_min = 400000;
-	cfg->f_max = 52000000;
+	debug("mmc %u sdc %d host_caps final %x f_max %u\n", priv->mmc_no,
+	      sdc_no, cfg->host_caps, cfg->f_max);
 
 	if (mmc_resource_init(sdc_no) != 0)
 		return NULL;
@@ -606,6 +659,9 @@ struct mmc *sunxi_mmc_init(int sdc_no)
 	writel(SUNXI_MMC_COMMON_CLK_GATE | SUNXI_MMC_COMMON_RESET,
 	       SUNXI_MMC_COMMON_BASE + 4 * sdc_no);
 #endif
+#elif defined(CONFIG_MACH_SUN60I_A733)
+	/* A733 has individual BGR registers per MMC channel: 0xd0c, 0xd1c, 0xd2c */
+	setbits_le32(ccm + 0x0d0c + sdc_no * 0x10, 0x00010001);
 #else /* CONFIG_SUN50I_GEN_H6 */
 	setbits_le32(ccm + CCU_H6_MMC_GATE_RESET, 1 << sdc_no);
 	/* unassert reset */
@@ -669,6 +725,9 @@ static unsigned get_mclk_offset(void)
 	if (IS_ENABLED(CONFIG_MACH_SUN9I_A80))
 		return 0x410;
 
+	if (IS_ENABLED(CONFIG_MACH_SUN60I_A733))
+		return 0x0d00;
+
 	if (IS_ENABLED(CONFIG_SUN50I_GEN_H6) || IS_ENABLED(CONFIG_SUNXI_GEN_NCAT2))
 		return 0x830;
 
@@ -710,7 +769,21 @@ static int sunxi_mmc_probe(struct udevice *dev)
 	ccu_reg = (u32 *)(uintptr_t)ofnode_get_addr(args.node);
 
 	priv->mmc_no = ((uintptr_t)priv->reg - SUNXI_MMC0_BASE) / 0x1000;
-	priv->mclkreg = (void *)ccu_reg + get_mclk_offset() + priv->mmc_no * 4;
+	if (IS_ENABLED(CONFIG_MACH_SUN60I_A733))
+		priv->mclkreg = (void *)ccu_reg + 0x0d00 + priv->mmc_no * 0x10;
+	else
+		priv->mclkreg = (void *)ccu_reg + get_mclk_offset() + priv->mmc_no * 4;
+
+	if ((IS_ENABLED(CONFIG_MACH_SUN55I_A523) ||
+	     IS_ENABLED(CONFIG_MACH_SUN60I_A733)) && priv->mmc_no == 2) {
+		/*
+		 * eMMC block reads are still unreliable at the full HS clock
+		 * in U-Boot proper, so keep the same conservative clock the
+		 * SPL uses.
+		 */
+		cfg->host_caps &= ~(MMC_MODE_HS_52MHz | MMC_MODE_HS);
+		cfg->f_max = 12000000;
+	}
 
 	ret = clk_get_by_name(dev, "ahb", &gate_clk);
 	if (!ret)
