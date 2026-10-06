@@ -577,12 +577,20 @@ config MACH_SUN60I_A733
 	select FIT
 	select SPL_LOAD_FIT if SPL
 	select LINUX_KERNEL_IMAGE_HEADER
+	select ARCH_SUN60IW2
+	select MACH_SUN60IW2
 	imply OF_UPSTREAM
 	help
 	  Allwinner A733 / T736 is an octa-core ARM Cortex-A76 / Cortex-A55
 	  processor with Mali-G57 GPU and LPDDR4/LPDDR5 memory support.
 
 endchoice
+
+config ARCH_SUN60IW2
+	bool
+
+config MACH_SUN60IW2
+	bool
 
 # The sun8i SoCs share a lot, this helps to avoid a lot of "if A23 || A33"
 config MACH_SUN8I

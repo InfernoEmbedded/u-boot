@@ -198,8 +198,12 @@ enum env_location env_get_location(enum env_operation op, int prio)
 #define SUNXI_USB3_BASE			0x06a00000UL
 #define SUNXI_USB3_LLUCTL_REG		(SUNXI_USB3_BASE + 0xd024)
 
+#define CCU_PLL_DE_CTRL_REG		0x02e0
 #define CCU_AHB_MAT_CLK_GATING_REG	0x05c0
 #define CCU_MBUS_MAT_CLK_GATING_REG	0x05e0
+#define CCU_DE0_CLK_REG			0x0a00
+#define CCU_DE0_BGR_REG			0x0a04
+#define CCU_DE_SYS_BGR_REG		0x0a74
 #define CCU_RST_BUS_PCIE_USB3_REG	0x0aac
 #define CCU_USB2_U2_REF_CLK_REG		0x1348
 #define CCU_USB2_RST_COMBPHY0_REG	0x134c
@@ -210,7 +214,10 @@ enum env_location env_get_location(enum env_operation op, int prio)
 #define CCU_USB2_U2_PIPE_CLK_REG	0x1364
 #define CCU_SERDES_PHY_CFG_CLK_REG	0x13c0
 #define CCU_SERDES_BGR_REG		0x13c4
+#define CCU_CM_DESYS_CFG_REG		0x1b04
 #define CCU_CM_USB2_CFG_REG		0x1b30
+#define CCU_CM_VO_CFG_REG		0x1b34
+#define CCU_CM_VO1_CFG_REG		0x1b38
 
 #define SERDES_SUBSYS_USB3P1_BGR	0x0008
 #define SERDES_SUBSYS_DBG_CTL		0x00f0
@@ -471,8 +478,33 @@ static void sunxi_a733_usb_init(void)
 	setbits_le32((void *)SUNXI_PIO_PD_DAT, BIT(20));
 	mdelay(100);
 }
+
+static void sunxi_a733_display_init(void)
+{
+	void __iomem *ccu = (void __iomem *)SUNXI_CCU_BASE;
+
+	if (!IS_ENABLED(CONFIG_AW_DRM))
+		return;
+
+	/* Enable PLL_DE with output gates 0 and 1 un-gated (0xEC125600) for DE3.5 */
+	writel(0xEC125600, ccu + CCU_PLL_DE_CTRL_REG);
+
+	/* Enable Clock Matrix for DE and Video Out: CM_DESYS, CM_VO, CM_VO1 */
+	writel(0x00020001, ccu + CCU_CM_DESYS_CFG_REG);
+	writel(0x00020001, ccu + CCU_CM_VO_CFG_REG);
+	writel(0x00020001, ccu + CCU_CM_VO1_CFG_REG);
+
+	/* Deassert DE resets and enable bus gating and module clock */
+	writel(0x00010001, ccu + CCU_DE_SYS_BGR_REG);
+	writel(0x00010001, ccu + CCU_DE0_BGR_REG);
+	writel(0x80000000, ccu + CCU_DE0_CLK_REG); /* DEPLL3X, div 1, gate ON */
+}
 #else
 static inline void sunxi_a733_usb_init(void)
+{
+}
+
+static inline void sunxi_a733_display_init(void)
 {
 }
 #endif
@@ -517,8 +549,10 @@ int board_init(void)
 	if (ret)
 		return ret;
 
-	if (IS_ENABLED(CONFIG_MACH_SUN60I_A733))
+	if (IS_ENABLED(CONFIG_MACH_SUN60I_A733)) {
 		sunxi_a733_usb_init();
+		sunxi_a733_display_init();
+	}
 
 	eth_init_board();
 
