@@ -75,7 +75,8 @@ int dwc3_core_init(struct dwc3 *dwc3_reg)
 	/* This should read as U3 followed by revision number */
 	if ((revision & DWC3_GSNPSID_MASK) != 0x55330000 &&
 	    (revision & DWC3_GSNPSID_MASK) != 0x33310000) {
-		puts("this is not a DesignWare USB3 DRD Core\n");
+		printf("this is not a DesignWare USB3 DRD Core (dwc3_reg=%p g_snpsid=0x%08x)\n",
+		       dwc3_reg, revision);
 		return -1;
 	}
 
@@ -206,6 +207,12 @@ static int xhci_dwc3_probe(struct udevice *dev)
 		reg &= ~DWC3_GUSB2PHYCFG_SUSPHY;
 
 	writel(reg, &dwc3_reg->g_usb2phycfg[0]);
+
+	/* Set dwc3 usb3 phy config */
+	reg = readl(&dwc3_reg->g_usb3pipectl[0]);
+	if (dev_read_bool(dev, "snps,dis_u3_susphy_quirk"))
+		reg &= ~DWC3_GUSB3PIPECTL_SUSPHY;
+	writel(reg, &dwc3_reg->g_usb3pipectl[0]);
 
 	dr_mode = usb_get_dr_mode(dev_ofnode(dev));
 	if (dr_mode == USB_DR_MODE_OTG &&
