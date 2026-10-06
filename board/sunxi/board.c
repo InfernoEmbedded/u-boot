@@ -189,6 +189,293 @@ enum env_location env_get_location(enum env_operation op, int prio)
 	return ENVL_UNKNOWN;
 }
 
+#if IS_ENABLED(CONFIG_MACH_SUN60I_A733)
+#define SUNXI_CCU_BASE			0x02002000UL
+#define SUNXI_SERDES_SYS_BASE		0x06c00000UL
+#define SUNXI_COMBOPHY0_TOP_BASE	0x06c01000UL
+#define SUNXI_COMBOPHY0_BASE		0x06c80000UL
+#define SUNXI_USB3_BASE			0x06a00000UL
+#define SUNXI_USB3_LLUCTL_REG		(SUNXI_USB3_BASE + 0xd024)
+
+#define CCU_AHB_MAT_CLK_GATING_REG	0x05c0
+#define CCU_MBUS_MAT_CLK_GATING_REG	0x05e0
+#define CCU_RST_BUS_PCIE_USB3_REG	0x0aac
+#define CCU_USB2_U2_REF_CLK_REG		0x1348
+#define CCU_USB2_RST_COMBPHY0_REG	0x134c
+#define CCU_USB2_SUSPEND_CLK_REG	0x1350
+#define CCU_USB2_MF_CLK_REG		0x1354
+#define CCU_USB2_BGR_REG		0x135c
+#define CCU_USB2_U3_UTMI_CLK_REG	0x1360
+#define CCU_USB2_U2_PIPE_CLK_REG	0x1364
+#define CCU_SERDES_PHY_CFG_CLK_REG	0x13c0
+#define CCU_SERDES_BGR_REG		0x13c4
+#define CCU_CM_USB2_CFG_REG		0x1b30
+
+#define SERDES_SUBSYS_USB3P1_BGR	0x0008
+#define SERDES_SUBSYS_DBG_CTL		0x00f0
+#define SERDES_SUBSYS_TOP_ISOLATION	0x6004
+#define SERDES_SUBSYS_PIPE_CLK_MAP	0x6100
+#define SERDES_SUBSYS_PIPE_RXD_MAP	0x6104
+#define SERDES_SUBSYS_TOP_PIPE_MAP	0x6c24
+#define SERDES_SUBSYS_TOP_PIPE_SEL0	0x6c40
+
+#define COMBOPHY_TOP_RESET_CTRL		0x0000
+#define COMBOPHY_TOP_REFCLK_CTRL	0x0004
+#define COMBOPHY_TOP_IDDQ_CTRL		0x0008
+#define COMBOPHY_TOP_PLL_CTRL		0x000c
+#define COMBOPHY_TOP_STATUS		0x0900
+#define COMBOPHY_PMA_CMN_READY		BIT(0)
+#define COMBOPHY_ANA_PMA_REG_18010	0x18010
+
+#define SUNXI_PIO_PB_CFG0		(SUNXI_PIO_BASE + 0x0100)
+#define SUNXI_PIO_PB_CFG1		(SUNXI_PIO_BASE + 0x0104)
+#define SUNXI_PIO_PB_DAT		(SUNXI_PIO_BASE + 0x0110)
+#define SUNXI_PIO_PD_CFG2		(SUNXI_PIO_BASE + 0x0208)
+#define SUNXI_PIO_PD_DAT		(SUNXI_PIO_BASE + 0x0210)
+
+struct cphy_reg {
+	u32 off;
+	u16 val;
+};
+
+static const struct cphy_reg cphy_regs[] = {
+	{ 0x81ca, 0x41 },
+	{ 0x85ca, 0x41 },
+	{ 0x89cc, 0x1 },
+	{ 0x8dcc, 0x1 },
+	{ 0x89ce, 0x0 },
+	{ 0x8dce, 0x0 },
+	{ 0x89ca, 0x19 },
+	{ 0x8dca, 0x19 },
+	{ 0x128, 0x4 },
+	{ 0x1a8, 0x4 },
+	{ 0x348, 0x509 },
+	{ 0x388, 0x509 },
+	{ 0x34a, 0xf00 },
+	{ 0x38a, 0xf00 },
+	{ 0x34c, 0xf08 },
+	{ 0x38c, 0xf08 },
+	{ 0x120, 0x180 },
+	{ 0x1a0, 0x19f },
+	{ 0x122, 0x9d8a },
+	{ 0x1a2, 0x6276 },
+	{ 0x124, 0x2 },
+	{ 0x1a4, 0x2 },
+	{ 0x126, 0x102 },
+	{ 0x1a6, 0x116 },
+	{ 0x340, 0x2 },
+	{ 0x380, 0x2 },
+	{ 0x130, 0x1 },
+	{ 0x1b0, 0x1 },
+	{ 0x132, 0x45f },
+	{ 0x1b2, 0x4c4 },
+	{ 0x134, 0x6b },
+	{ 0x1b4, 0x6a },
+	{ 0x136, 0x4 },
+	{ 0x1b6, 0x4 },
+	{ 0x108, 0x104 },
+	{ 0x188, 0x104 },
+	{ 0x10a, 0x5 },
+	{ 0x18a, 0x5 },
+	{ 0x10c, 0x337 },
+	{ 0x18c, 0x337 },
+	{ 0x110, 0x335 },
+	{ 0x190, 0x335 },
+	{ 0x104, 0x3 },
+	{ 0x184, 0x3 },
+	{ 0x138, 0xcf },
+	{ 0x1b8, 0xcf },
+	{ 0x13c, 0xce },
+	{ 0x1bc, 0xce },
+	{ 0x13e, 0x5 },
+	{ 0x1be, 0x5 },
+	{ 0x18020, 0x5100 },
+	{ 0x18022, 0x100 },
+	{ 0x18022, 0x10f },
+	{ 0x18030, 0xa0a },
+	{ 0x18034, 0x1008 },
+	{ 0x18036, 0x10 },
+	{ 0x82, 0x8200 },
+	{ 0x8e, 0x8200 },
+	{ 0x8e00, 0xff },
+	{ 0x8e02, 0x4af },
+	{ 0x8e04, 0x4ae },
+	{ 0x8e06, 0x4ae },
+	{ 0x10800, 0x91d },
+	{ 0x10802, 0x91d },
+	{ 0x10804, 0x900 },
+	{ 0x10806, 0x0 },
+	{ 0x8c80, 0x2a84 },
+	{ 0x8c9a, 0x11 },
+	{ 0x10920, 0xc },
+	{ 0x10a10, 0x9 },
+	{ 0x10a92, 0xc02 },
+	{ 0x10aee, 0x6f6 },
+	{ 0x10af0, 0x4606 },
+	{ 0x89d6, 0x6 },
+	{ 0x10ae2, 0x519 },
+	{ 0x10ae4, 0x519 },
+	{ 0x10bd0, 0x1002 },
+	{ 0x10bca, 0xb98 },
+	{ 0x10bc4, 0xc01 },
+	{ 0x10bc6, 0x0 },
+	{ 0x10bea, 0x0 },
+	{ 0x10be8, 0x311 },
+	{ 0x10bfe, 0x0 },
+	{ 0x10ffe, 0x0 },
+	{ 0x10900, 0x10a },
+	{ 0x10904, 0x3 },
+	{ 0x8dd4, 0xff },
+	{ 0x89d4, 0xff },
+	{ 0x8200, 0x2ff },
+	{ 0x8202, 0x6af },
+	{ 0x8204, 0x6ae },
+	{ 0x8206, 0x6ae },
+	{ 0x10400, 0xd1d },
+	{ 0x10402, 0xd1d },
+	{ 0x10404, 0xd00 },
+	{ 0x10406, 0x500 },
+	{ 0x8080, 0x2a82 },
+	{ 0x809a, 0x14 },
+	{ 0x10520, 0x13 },
+	{ 0x10610, 0x0 },
+	{ 0x10692, 0xc02 },
+	{ 0x106ee, 0x330 },
+	{ 0x106f0, 0x300 },
+	{ 0x85d6, 0x3 },
+	{ 0x106e2, 0x19 },
+	{ 0x106e4, 0x19 },
+	{ 0x107d0, 0x1004 },
+	{ 0x107ca, 0xf9 },
+	{ 0x107c4, 0xc01 },
+	{ 0x107c6, 0x2 },
+	{ 0x107ea, 0x0 },
+	{ 0x107e8, 0x31 },
+	{ 0x107fe, 0x1 },
+	{ 0x103fe, 0x2 },
+	{ 0x10500, 0x18c },
+	{ 0x10504, 0x3 },
+	{ 0x81d4, 0xf },
+	{ 0x85d4, 0xf0 },
+	{ 0x1c006, 0x1 },
+	{ 0x206, 0x7f },
+	{ 0x216, 0x7f },
+};
+
+static void sunxi_a733_usb_init(void)
+{
+	void __iomem *ccu = (void __iomem *)SUNXI_CCU_BASE;
+	void __iomem *subsys = (void __iomem *)SUNXI_SERDES_SYS_BASE;
+	void __iomem *phy_top0 = (void __iomem *)SUNXI_COMBOPHY0_TOP_BASE;
+	void __iomem *phy_analog0 = (void __iomem *)SUNXI_COMBOPHY0_BASE;
+	u32 val;
+	int i;
+
+	/* 1. CCU Master Gates & USB2 / SerDes Clocks */
+	/* AHB Master Gate: Enable SerDes (bit 8) and USB (bit 9) */
+	val = readl(ccu + CCU_AHB_MAT_CLK_GATING_REG);
+	writel(val | BIT(8) | BIT(9), ccu + CCU_AHB_MAT_CLK_GATING_REG);
+
+	/* MBUS Master Gate: Enable SerDes (bit 28) */
+	val = readl(ccu + CCU_MBUS_MAT_CLK_GATING_REG);
+	writel(val | BIT(28), ccu + CCU_MBUS_MAT_CLK_GATING_REG);
+
+	/* High speed clocks & resets */
+	writel(0x00000001, ccu + CCU_CM_USB2_CFG_REG); /* CM_USB2_CFG_REG: enable USB2 module */
+	writel(0x81000000, ccu + CCU_USB2_U2_REF_CLK_REG); /* USB2_U2_REF_CLK */
+	writel(0x81000000, ccu + CCU_USB2_SUSPEND_CLK_REG); /* USB2_SUSPEND_CLK */
+	writel(0x81000000, ccu + CCU_USB2_MF_CLK_REG); /* USB2_MF_CLK (300MHz AXI) */
+	writel(0x00010001, ccu + CCU_USB2_BGR_REG); /* USB2_BGR_REG (Reset deassert) */
+	writel(0x81000000, ccu + CCU_USB2_U3_UTMI_CLK_REG); /* USB2_U3_UTMI_CLK */
+	writel(0x81000000, ccu + CCU_USB2_U2_PIPE_CLK_REG); /* USB2_U2_PIPE_CLK (480MHz PLL) */
+
+	/* SERDES_PHY_CFG: 100MHz refclk with divisor 11 (0x8100000b) */
+	writel(0x00010001, ccu + CCU_RST_BUS_PCIE_USB3_REG); /* RST_BUS_PCIE_USB3 */
+	writel(0x81000000, ccu + CCU_USB2_U2_REF_CLK_REG); /* CLK_COMBPHY0 */
+	writel(0x00010001, ccu + CCU_USB2_RST_COMBPHY0_REG); /* RST_COMBPHY0 */
+	writel(0x8100000b, ccu + CCU_SERDES_PHY_CFG_CLK_REG); /* SERDES_PHY_CFG */
+	writel(0x00010001, ccu + CCU_SERDES_BGR_REG); /* SERDES_BGR */
+
+	/* 2. Subsystem Bus Gating & Routing */
+	writel(0x00330033, subsys + SERDES_SUBSYS_USB3P1_BGR);
+	writel(0x20000002, subsys + SERDES_SUBSYS_DBG_CTL);
+	writel(0x00000000, subsys + SERDES_SUBSYS_PIPE_CLK_MAP); /* PIPE CLK MAP -> Combo 0 */
+	writel(0x00000000, subsys + SERDES_SUBSYS_PIPE_RXD_MAP); /* PIPE RXD MAP -> Combo 0 */
+	writel(0x00003210, subsys + SERDES_SUBSYS_TOP_PIPE_MAP);
+	writel(0x00000000, subsys + SERDES_SUBSYS_TOP_PIPE_SEL0); /* Combo 0 to USB3 */
+	writel(0x00000ff1, subsys + SERDES_SUBSYS_TOP_ISOLATION); /* TOP_ISOLATION release */
+
+	/* 3. Program Cadence Combo PHY 0 (Blue Type-A USB3 SerDes) */
+	/* Clear IDDQ */
+	val = readl(phy_top0 + COMBOPHY_TOP_IDDQ_CTRL);
+	val &= ~(BIT(1) | BIT(0));
+	writel(val, phy_top0 + COMBOPHY_TOP_IDDQ_CTRL);
+
+	/* Set Refclk mode */
+	writel(0x11100001, phy_top0 + COMBOPHY_TOP_REFCLK_CTRL);
+
+	/* Write analog SerDes registers */
+	for (i = 0; i < ARRAY_SIZE(cphy_regs); i++)
+		writew(cphy_regs[i].val, phy_analog0 + cphy_regs[i].off);
+
+	/* PHY Reset Toggle */
+	val = readl(phy_top0 + COMBOPHY_TOP_RESET_CTRL);
+	val &= ~BIT(0);
+	writel(val, phy_top0 + COMBOPHY_TOP_RESET_CTRL);
+	mdelay(1);
+	val |= BIT(0) | BIT(4); /* PHY0_RESET_N | PHY0_PIPE_LINK_RESET_N_SOFT */
+	writel(val, phy_top0 + COMBOPHY_TOP_RESET_CTRL);
+
+	/* Enable PLL */
+	val = readl(phy_top0 + COMBOPHY_TOP_PLL_CTRL);
+	val |= BIT(0); /* PHY0_PMA_XCVR_PLLCLK_EN_LN */
+	writel(val, phy_top0 + COMBOPHY_TOP_PLL_CTRL);
+
+	/* Power State Req LN(1) */
+	val = readl(phy_top0 + COMBOPHY_TOP_PLL_CTRL);
+	val |= (1 << 4);
+	writel(val, phy_top0 + COMBOPHY_TOP_PLL_CTRL);
+
+	/* DP link reset soft */
+	val = readl(phy_top0 + COMBOPHY_TOP_RESET_CTRL);
+	val |= BIT(8);
+	writel(val, phy_top0 + COMBOPHY_TOP_RESET_CTRL);
+
+	/* PMA Fixup: 0xC008 << 1 = 0x18010 */
+	val = readw(phy_analog0 + COMBOPHY_ANA_PMA_REG_18010);
+	val &= ~(0xF << 8);
+	writew(val, phy_analog0 + COMBOPHY_ANA_PMA_REG_18010);
+
+	/* Poll for PMA_CMN_READY */
+	for (i = 0; i < 1000; i++) {
+		if (readl(phy_top0 + COMBOPHY_TOP_STATUS) & COMBOPHY_PMA_CMN_READY)
+			break;
+		udelay(10);
+	}
+
+	/* DWC3 LLUCTL: Invert Sync Header for Cadence Combo SerDes */
+	writel(0x408b8080, (void *)SUNXI_USB3_LLUCTL_REG);
+
+	/* 4. Enable 5V USB VBUS power (PB7 = LOW, PB8 = HIGH, PD20 = HIGH) */
+	/* Bank B (PB7): CFG0 bit 28 = 1 (output), DAT bit 7 = 0 */
+	clrsetbits_le32((void *)SUNXI_PIO_PB_CFG0, GENMASK(31, 28), 1U << 28);
+	clrbits_le32((void *)SUNXI_PIO_PB_DAT, BIT(7));
+
+	/* Bank B (PB8): CFG1 bit 0 = 1 (output), DAT bit 8 = 1 */
+	clrsetbits_le32((void *)SUNXI_PIO_PB_CFG1, GENMASK(3, 0), 1U);
+	setbits_le32((void *)SUNXI_PIO_PB_DAT, BIT(8));
+
+	/* Bank D (PD20): CFG2 bit 16 = 1 (output), DAT bit 20 = 1 */
+	clrsetbits_le32((void *)SUNXI_PIO_PD_CFG2, GENMASK(19, 16), 1U << 16);
+	setbits_le32((void *)SUNXI_PIO_PD_DAT, BIT(20));
+	mdelay(100);
+}
+#else
+static inline void sunxi_a733_usb_init(void)
+{
+}
+#endif
+
 /* called only from U-Boot proper */
 int board_init(void)
 {
@@ -228,6 +515,9 @@ int board_init(void)
 	ret = axp_gpio_init();
 	if (ret)
 		return ret;
+
+	if (IS_ENABLED(CONFIG_MACH_SUN60I_A733))
+		sunxi_a733_usb_init();
 
 	eth_init_board();
 

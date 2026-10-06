@@ -23,6 +23,25 @@
 	chosen {
 		stdout-path = "serial0:115200n8";
 	};
+
+	reg_usb1_vbus: regulator-usb1-vbus {
+		compatible = "regulator-fixed";
+		regulator-name = "usb1-vbus";
+		regulator-min-microvolt = <5000000>;
+		regulator-max-microvolt = <5000000>;
+		gpios = <&pio 1 7 GPIO_ACTIVE_LOW>; /* PB7 */
+		regulator-always-on;
+		regulator-boot-on;
+	};
+
+	reg_usb0_vbus: regulator-usb0-vbus {
+		compatible = "regulator-fixed";
+		regulator-name = "usb0-vbus";
+		regulator-min-microvolt = <5000000>;
+		regulator-max-microvolt = <5000000>;
+		regulator-always-on;
+		regulator-boot-on;
+	};
 };
 
 &uart0 {
@@ -104,4 +123,43 @@
 			compatible = "ethernet-phy-ieee802.3-c22";
 		};
 	};
+};
+
+&usbphy {
+	usb0_vbus-supply = <&reg_usb1_vbus>;
+	usb1_vbus-supply = <&reg_usb0_vbus>;
+	status = "okay";
+};
+
+&ehci0 {
+	vbus-supply = <&reg_usb1_vbus>;
+	status = "okay";
+};
+
+&ohci0 {
+	vbus-supply = <&reg_usb1_vbus>;
+	status = "okay";
+};
+
+&ehci1 {
+	vbus-supply = <&reg_usb0_vbus>;
+	status = "okay";
+};
+
+&ohci1 {
+	vbus-supply = <&reg_usb0_vbus>;
+	status = "okay";
+};
+
+&dwc3 {
+	vbus-supply = <&reg_usb1_vbus>;
+	dr_mode = "host";
+	status = "okay";
+};
+
+&pcie_rc {
+	status = "okay";
+	power-gpios = <&r_pio 0 3 GPIO_ACTIVE_HIGH>;
+	reset-gpios = <&pio 3 22 GPIO_ACTIVE_HIGH>;
+	wake-gpios = <&pio 3 21 GPIO_ACTIVE_HIGH>;
 };
