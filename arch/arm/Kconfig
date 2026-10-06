@@ -103,6 +103,7 @@ config LINUX_KERNEL_IMAGE_HEADER
 
 config LNX_KRNL_IMG_TEXT_OFFSET_BASE
 	depends on LINUX_KERNEL_IMAGE_HEADER
+	default 0x40000000 if ARCH_SUNXI
 	hex
 	help
 	  The value subtracted from CONFIG_TEXT_BASE to calculate the
