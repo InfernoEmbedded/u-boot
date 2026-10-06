@@ -96,6 +96,7 @@ static const struct udevice_id axp_pmic_ids[] = {
 	{ .compatible = "x-powers,axp809", .data = AXP809_ID },
 	{ .compatible = "x-powers,axp813", .data = AXP813_ID },
 	{ .compatible = "x-powers,axp318w", .data = AXP318_ID },
+	{ .compatible = "x-powers,axp8191", .data = AXP8191_ID },
 	{ }
 };
 
