@@ -49,6 +49,7 @@
 #include <net.h>
 #include <spl.h>
 #include <sy8106a.h>
+#include <thermal.h>
 #include <asm/setup.h>
 
 DECLARE_GLOBAL_DATA_PTR;
@@ -1161,6 +1162,16 @@ int board_late_init(void)
 #ifdef CONFIG_USB_ETHER
 	usb_ether_init();
 #endif
+
+	if (IS_ENABLED(CONFIG_MACH_SUN60I_A733) && CONFIG_IS_ENABLED(DM_THERMAL)) {
+		struct udevice *thermal_dev;
+		int temp;
+
+		if (!uclass_first_device_err(UCLASS_THERMAL, &thermal_dev)) {
+			if (!thermal_get_temp(thermal_dev, &temp))
+				printf("CPU Temperature: %d C\n", temp / 1000);
+		}
+	}
 
 	return 0;
 }
