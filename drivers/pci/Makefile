@@ -42,6 +42,7 @@ obj-$(CONFIG_PCI_XILINX) += pcie_xilinx.o
 obj-$(CONFIG_PCI_PHYTIUM) += pcie_phytium.o
 obj-$(CONFIG_PCIE_DW_COMMON) += pcie_dw_common.o
 obj-$(CONFIG_PCI_KEYSTONE) += pcie_dw_ti.o
+obj-$(CONFIG_PCIE_DW_SUNXI) += pcie_dw_sunxi.o
 obj-$(CONFIG_PCIE_MEDIATEK) += pcie_mediatek.o
 obj-$(CONFIG_PCIE_MEDIATEK_GEN3) += pcie_mediatek_gen3.o
 obj-$(CONFIG_PCIE_ROCKCHIP) += pcie_rockchip.o
