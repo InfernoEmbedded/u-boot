@@ -38,21 +38,26 @@
 
 #define GPIO_DAT_REG_OFFSET	0x10
 
-#define GPIO_DRV_REG_OFFSET	0x14
-
 /*		Newer SoCs use a slightly different register layout */
 #ifdef CONFIG_SUNXI_NEW_PINCTRL
 /* pin drive strength: 4 bits per pin */
 #define GPIO_DRV_INDEX(pin)	((pin) / 8)
 #define GPIO_DRV_OFFSET(pin)	(((pin) % 8) * 4)
 
+#if defined(CONFIG_MACH_SUN55I_A523) || defined(CONFIG_MACH_SUN60I_A733)
+#define GPIO_DRV_REG_OFFSET	0x20
+#define GPIO_PULL_REG_OFFSET	0x30
+#else
+#define GPIO_DRV_REG_OFFSET	0x14
 #define GPIO_PULL_REG_OFFSET	0x24
+#endif
 
 #else /* older generation pin controllers */
 /* pin drive strength: 2 bits per pin */
 #define GPIO_DRV_INDEX(pin)	((pin) / 16)
 #define GPIO_DRV_OFFSET(pin)	(((pin) % 16) * 2)
 
+#define GPIO_DRV_REG_OFFSET	0x14
 #define GPIO_PULL_REG_OFFSET	0x1c
 #endif
 

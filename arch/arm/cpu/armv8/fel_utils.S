@@ -57,6 +57,11 @@ ENTRY(return_to_fel)
 
 	dsb	sy
 	isb	sy
+#if defined(CONFIG_MACH_SUN60I_A733)
+	ldr	x2, =0x08001000
+	mov	w0, #0
+	str	w0, [x2]
+#endif
 	mov	x0, #2			// RMR reset into AArch32
 	dsb	sy
 	msr	RMR_EL3, x0

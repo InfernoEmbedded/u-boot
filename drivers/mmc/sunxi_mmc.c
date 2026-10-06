@@ -606,6 +606,9 @@ struct mmc *sunxi_mmc_init(int sdc_no)
 	writel(SUNXI_MMC_COMMON_CLK_GATE | SUNXI_MMC_COMMON_RESET,
 	       SUNXI_MMC_COMMON_BASE + 4 * sdc_no);
 #endif
+#elif defined(CONFIG_MACH_SUN60I_A733)
+	/* A733 has individual BGR registers per MMC channel: 0xd0c, 0xd1c, 0xd2c */
+	setbits_le32(ccm + 0x0d0c + sdc_no * 0x10, 0x00010001);
 #else /* CONFIG_SUN50I_GEN_H6 */
 	setbits_le32(ccm + CCU_H6_MMC_GATE_RESET, 1 << sdc_no);
 	/* unassert reset */
@@ -669,6 +672,9 @@ static unsigned get_mclk_offset(void)
 	if (IS_ENABLED(CONFIG_MACH_SUN9I_A80))
 		return 0x410;
 
+	if (IS_ENABLED(CONFIG_MACH_SUN60I_A733))
+		return 0x0d00;
+
 	if (IS_ENABLED(CONFIG_SUN50I_GEN_H6) || IS_ENABLED(CONFIG_SUNXI_GEN_NCAT2))
 		return 0x830;
 
@@ -710,7 +716,10 @@ static int sunxi_mmc_probe(struct udevice *dev)
 	ccu_reg = (u32 *)(uintptr_t)ofnode_get_addr(args.node);
 
 	priv->mmc_no = ((uintptr_t)priv->reg - SUNXI_MMC0_BASE) / 0x1000;
-	priv->mclkreg = (void *)ccu_reg + get_mclk_offset() + priv->mmc_no * 4;
+	if (IS_ENABLED(CONFIG_MACH_SUN60I_A733))
+		priv->mclkreg = (void *)ccu_reg + 0x0d00 + priv->mmc_no * 0x10;
+	else
+		priv->mclkreg = (void *)ccu_reg + get_mclk_offset() + priv->mmc_no * 4;
 
 	ret = clk_get_by_name(dev, "ahb", &gate_clk);
 	if (!ret)
