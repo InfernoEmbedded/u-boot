@@ -38,21 +38,26 @@
 
 #define GPIO_DAT_REG_OFFSET	0x10
 
-#define GPIO_DRV_REG_OFFSET	0x14
-
 /*		Newer SoCs use a slightly different register layout */
 #ifdef CONFIG_SUNXI_NEW_PINCTRL
 /* pin drive strength: 4 bits per pin */
 #define GPIO_DRV_INDEX(pin)	((pin) / 8)
 #define GPIO_DRV_OFFSET(pin)	(((pin) % 8) * 4)
 
+#if defined(CONFIG_MACH_SUN55I_A523) || defined(CONFIG_MACH_SUN60I_A733)
+#define GPIO_DRV_REG_OFFSET	0x20
+#define GPIO_PULL_REG_OFFSET	0x30
+#else
+#define GPIO_DRV_REG_OFFSET	0x14
 #define GPIO_PULL_REG_OFFSET	0x24
+#endif
 
 #else /* older generation pin controllers */
 /* pin drive strength: 2 bits per pin */
 #define GPIO_DRV_INDEX(pin)	((pin) / 16)
 #define GPIO_DRV_OFFSET(pin)	(((pin) % 16) * 2)
 
+#define GPIO_DRV_REG_OFFSET	0x14
 #define GPIO_PULL_REG_OFFSET	0x1c
 #endif
 
@@ -65,12 +70,16 @@ static void* BANK_TO_GPIO(int bank)
 
 	if (bank < SUNXI_GPIO_L) {
 		pio_base = (void *)(uintptr_t)SUNXI_PIO_BASE;
+#if defined(CONFIG_MACH_SUN60I_A733)
+		return pio_base + 0x80 + bank * 0x80;
+#else
+		return pio_base + bank * SUNXI_PINCTRL_BANK_SIZE;
+#endif
 	} else {
 		pio_base = (void *)(uintptr_t)SUNXI_R_PIO_BASE;
 		bank -= SUNXI_GPIO_L;
+		return pio_base + bank * SUNXI_PINCTRL_BANK_SIZE;
 	}
-
-	return pio_base + bank * SUNXI_PINCTRL_BANK_SIZE;
 }
 
 void sunxi_gpio_set_cfgbank(void *bank_base, int pin_offset, u32 val)
