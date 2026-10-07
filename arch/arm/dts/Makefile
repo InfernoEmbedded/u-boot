@@ -661,6 +661,9 @@ dtb-$(CONFIG_MACH_SUN50I) += \
 dtb-$(CONFIG_MACH_SUN9I) += \
 	sun9i-a80-cx-a99.dtb
 
+dtb-$(CONFIG_MACH_SUN60I_A733) += \
+	sun60i-a733-orangepi-4-pro.dtb
+
 dtb-$(CONFIG_VF610) += vf610-colibri-eval-v3.dtb \
 	vf610-twr.dtb \
 	vf610-pcm052.dtb \
