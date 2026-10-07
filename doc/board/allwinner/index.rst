@@ -7,3 +7,4 @@ Allwinner (sunxi) boards
    :maxdepth: 2
 
    sunxi
+   a733-pmu
