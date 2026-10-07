@@ -16,6 +16,58 @@
  */
 	tst     x0, x0                  // this is "b #0x84" in ARM
 	b       reset
+#if defined(CONFIG_MACH_SUN60I_A733)
+	.space  0x78
+	.word	fel_stash - .
+
+	.word	0xe24f000c	// sub r0, pc, #12
+	.word	0xe51f1010	// ldr r1, [pc, #-16] @ fel_stash_addr
+	.word	0xe0800001	// add r0, r0, r1
+	.word	0xe580d000	// str sp, [r0]
+	.word	0xe580e004	// str lr, [r0, #4]
+	.word	0xe10fe000	// mrs lr, CPSR
+	.word	0xe580e008	// str lr, [r0, #8]
+	.word	0xe101e300	// mrs lr, SP_irq
+	.word	0xe580e014	// str lr, [r0, #20]
+	.word	0xee11ef10	// mrc 15, 0, lr, cr1, cr0, {0}
+	.word	0xe580e00c	// str lr, [r0, #12]
+	.word	0xee1cef10	// mrc 15, 0, lr, cr12, cr0, {0}
+	.word	0xe580e010	// str lr, [r0, #16]
+	.word	0xee1cefbc	// mrc 15, 0, lr, cr12, cr12, {5}
+	.word	0xe31e0001	// tst lr, #1
+	.word	0x0a000003	// beq d4
+	.word	0xee14ef16	// mrc 15, 0, lr, cr4, cr6, {0}
+	.word	0xe580e018	// str lr, [r0, #24]
+	.word	0xee1ceffc	// mrc 15, 0, lr, cr12, cr12, {7}
+	.word	0xe580e01c	// str lr, [r0, #28]
+
+	.word	0xe59f1040	// ldr r1, [pc, #64] @ 0x08000200
+	.word	0xe3a02001	// mov r2, #1
+	.word	0xe5812000	// str r2, [r1]
+	.word	0xe59f1038	// ldr r1, [pc, #56] @ 0x08001000
+	.word	0xe3a02001	// mov r2, #1
+	.word	0xe5812000	// str r2, [r1]
+	.word	0xe59f0030	// ldr r0, [pc, #48] @ RVBAR target
+	.word	0xe5810004	// str r0, [r1, #4]
+	.word	0xe3a02000	// mov r2, #0
+	.word	0xe5812008	// str r2, [r1, #8]
+	.word	0xf57ff04f	// dsb sy
+	.word	0xf57ff06f	// isb sy
+	.word	0xee1c0f50	// mrc 15, 0, r0, cr12, cr0, {2}
+	.word	0xe3800003	// orr r0, r0, #3
+	.word	0xee0c0f50	// mcr 15, 0, r0, cr12, cr0, {2}
+	.word	0xf57ff06f	// isb sy
+	.word	0xe320f003	// wfi
+	.word	0xeafffffd	// b wfi
+
+	.word	0x08000200	// CPU_DA_DDR_CTRL_REG
+	.word	0x08001000	// CLU0_CPU0_CTRL_REG
+#ifdef CONFIG_XPL_BUILD
+	.word	CONFIG_SPL_TEXT_BASE
+#else
+	.word	CONFIG_TEXT_BASE
+#endif
+#else
 	.space  0x78
 	.word	fel_stash - .
 
@@ -64,6 +116,7 @@
 	.word	CONFIG_SPL_TEXT_BASE
 #else
 	.word   CONFIG_TEXT_BASE
+#endif
 #endif
 #else
 /* normal execution */

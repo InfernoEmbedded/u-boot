@@ -227,6 +227,7 @@ config AXP_PMIC_BUS
 config SUNXI_SRAM_ADDRESS
 	hex
 	default 0x10000 if MACH_SUN9I || MACH_SUN50I || MACH_SUN50I_H5
+	default 0x47000 if MACH_SUN60I_A733
 	default 0x44000 if MACH_SUN55I_A523
 	default 0x20000 if SUN50I_GEN_H6 || SUNXI_GEN_NCAT2
 	default 0x0
@@ -241,6 +242,7 @@ config SUNXI_RVBAR_ADDRESS
 	depends on ARM64
 	default 0x08100040 if MACH_SUN50I_A133
 	default 0x08000040 if MACH_SUN55I_A523
+	default 0x08001004 if MACH_SUN60I_A733
 	default 0x09010040 if SUN50I_GEN_H6
 	default 0x017000a0
 	help
@@ -267,7 +269,7 @@ config SUNXI_RVBAR_ALTERNATIVE
 config SUNXI_BL31_BASE
 	hex
 	default 0x00044000 if MACH_SUN50I || MACH_SUN50I_H5
-	default 0x40000000 if MACH_SUN50I_H616
+	default 0x40000000 if MACH_SUN50I_H616 || MACH_SUN60I_A733
 	default 0x00104000 if SUN50I_GEN_H6
 	default 0x00054000 if MACH_SUN55I_A523
 	default 0x0
@@ -351,6 +353,7 @@ config MACH_SUNXI_H3_H5
 # TODO: try out A80's 8GiB DRAM space
 config SUNXI_DRAM_MAX_SIZE
 	hex
+	default 0x400000000 if MACH_SUN60I_A733
 	default 0x100000000 if MACH_SUN50I_H616 || MACH_SUN50I_A133 || MACH_SUN55I_A523
 	default 0xC0000000 if MACH_SUN50I || MACH_SUN50I_H5 || MACH_SUN50I_H6
 	default 0x80000000
@@ -565,6 +568,19 @@ config MACH_SUN55I_A523
 	select FIT
 	select SPL_LOAD_FIT if SPL
 	imply OF_UPSTREAM
+
+config MACH_SUN60I_A733
+	bool "sun60i (Allwinner A733/T736)"
+	select ARM64
+	select SUNXI_GEN_NCAT2
+	select SUNXI_NEW_PINCTRL
+	select DRAM_SUN60I_A733
+	select FIT
+	select SPL_LOAD_FIT if SPL
+	select SPL_ATF if SPL
+	help
+	  Support for Allwinner A733 and T736 SoCs with octa-core ARMv8 cores,
+	  NCAT2 interconnect, and LPDDR5 DRAM controller.
 
 endchoice
 
@@ -883,6 +899,7 @@ config SYS_CONFIG_NAME
 	default "sun50i" if MACH_SUN50I_H616
 	default "sun50i" if MACH_SUN50I_A133
 	default "sun55i" if MACH_SUN55I_A523
+	default "sun60i" if MACH_SUN60I_A733
 
 config SYS_BOARD
 	default "sunxi"

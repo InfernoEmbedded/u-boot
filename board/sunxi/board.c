@@ -243,6 +243,15 @@ int board_init(void)
 static struct boot_file_head * get_spl_header(uint8_t req_version)
 {
 	struct boot_file_head *spl = (void *)(ulong)SPL_ADDR;
+#if defined(CONFIG_MACH_SUN60I_A733)
+	/*
+	 * In FEL mode, sunxi-fel uses an SRAM swap buffer to preserve the
+	 * BROM stack. When returning from SPL to FEL, BROM state is restored
+	 * to SPL_ADDR (0x47000), leaving the SPL header in SRAM A2.
+	 */
+	if (memcmp(spl->spl_signature, SPL_SIGNATURE, 3) != 0)
+		spl = (void *)SUNXI_FEL_SPL_ADDR;
+#endif
 	uint8_t spl_header_version = spl->spl_signature[3];
 
 	/* Is there really the SPL header (still) there? */
@@ -454,6 +463,15 @@ static void mmc_pinmux_setup(int sdc)
 			if (pin > SUNXI_GPC(1) && pin < SUNXI_GPC(5))
 				continue;
 			if (pin == SUNXI_GPC(7) || pin == SUNXI_GPC(12))
+				continue;
+			sunxi_gpio_set_cfgpin(pin, SUNXI_GPC_SDC2);
+			sunxi_gpio_set_pull(pin, SUNXI_GPIO_PULL_UP);
+			sunxi_gpio_set_drv(pin, 3);
+		}
+#elif defined(CONFIG_MACH_SUN60I_A733)
+		/* SDC2: PC0-PC1, PC5-PC13 */
+		for (pin = SUNXI_GPC(0); pin <= SUNXI_GPC(13); pin++) {
+			if (pin > SUNXI_GPC(1) && pin < SUNXI_GPC(5))
 				continue;
 			sunxi_gpio_set_cfgpin(pin, SUNXI_GPC_SDC2);
 			sunxi_gpio_set_pull(pin, SUNXI_GPIO_PULL_UP);

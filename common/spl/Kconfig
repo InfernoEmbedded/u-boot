@@ -72,6 +72,7 @@ config SPL_MAX_SIZE
 	default 0x1b000 if AM33XX && !TI_SECURE_DEVICE
 	default 0xec00 if OMAP34XX
 	default 0x10000 if ARCH_MX6 && !MX6_OCRAM_256KB
+	default 0x40000 if MACH_SUN60I_A733
 	default 0xbfa0 if MACH_SUN50I_H616 || MACH_SUN50I_A133 || MACH_SUN55I_A523
 	default 0x7000 if RCAR_GEN3
 	default 0x5fa0 if SUNXI_SRAM_ADDRESS = 0x0
@@ -283,6 +284,7 @@ config SPL_TEXT_BASE
 	default 0x00912000 if ARCH_MX7
 	default 0x40301350 if OMAP54XX
 	default 0x10060 if MACH_SUN50I || MACH_SUN50I_H5 || MACH_SUN9I
+	default 0x47060 if MACH_SUN60I_A733
 	default 0x44060 if MACH_SUN55I_A523
 	default 0x20060 if SUN50I_GEN_H6 || SUNXI_GEN_NCAT2
 	default 0x00060 if ARCH_SUNXI
@@ -438,6 +440,7 @@ config SPL_STACK
 	default 0x118000 if MACH_SUN50I_H6
 	default 0x52a00 if MACH_SUN50I_H616
 	default 0x40000 if MACH_SUN8I_R528 || MACH_SUN50I_A133
+	default 0x8d000 if MACH_SUN60I_A733
 	default 0x44000 if MACH_SUN55I_A523
 	default 0x54000 if MACH_SUN50I || MACH_SUN50I_H5
 	default 0x18000 if MACH_SUN9I
@@ -674,7 +677,7 @@ config SYS_MMCSD_RAW_MODE_EMMC_BOOT_PARTITION
 config SPL_FIT_IMAGE_TINY
 	bool "Remove functionality from SPL FIT loading to reduce size"
 	depends on SPL_FIT
-	default y if ARCH_IMX8M || ARCH_IMX9 || ARCH_SUNXI
+	default y if ARCH_IMX8M || ARCH_IMX9 || (ARCH_SUNXI && !MACH_SUN60I_A733)
 	help
 	  Enable this to reduce the size of the FIT image loading code
 	  in SPL, if space for the SPL binary is very tight.

@@ -16,6 +16,9 @@ void clock_init_safe(void)
 	void *const ccm = (void *)SUNXI_CCM_BASE;
 	void *const prcm = (void *)SUNXI_PRCM_BASE;
 
+	if (IS_ENABLED(CONFIG_MACH_SUN60I_A733))
+		return;
+
 	if (IS_ENABLED(CONFIG_MACH_SUN50I_H616))
 		setbits_le32(prcm + CCU_PRCM_SYS_PWROFF_GATING, 0x10);
 	if (IS_ENABLED(CONFIG_MACH_SUN55I_A523))
@@ -77,6 +80,19 @@ void clock_init_safe(void)
 void clock_init_uart(void)
 {
 	void *const ccm = (void *)SUNXI_CCM_BASE;
+
+	if (IS_ENABLED(CONFIG_MACH_SUN60I_A733)) {
+		/* A733: APB1 (bus-uart) clock source is OSC24M / 1 */
+		writel(APB2_CLK_SRC_OSC24M |
+		       APB2_CLK_RATE_N_1 |
+		       APB2_CLK_RATE_M(1),
+		       ccm + CCU_A733_APB1_CFG);
+
+		/* Deassert reset and enable clock gate for console UART */
+		setbits_le32(ccm + CCU_A733_UART_BGR_REG(CONFIG_CONS_INDEX - 1),
+			     BIT(RESET_SHIFT) | BIT(GATE_SHIFT));
+		return;
+	}
 
 	/* uart clock source is apb2 */
 	writel(APB2_CLK_SRC_OSC24M|
@@ -198,6 +214,9 @@ void clock_set_pll1(unsigned int clk)
 		clk = 288000000;
 
 	clk /= 24000000;
+
+	if (IS_ENABLED(CONFIG_MACH_SUN60I_A733))
+		return;
 
 	if (IS_ENABLED(CONFIG_MACH_SUN55I_A523))
 		clock_a523_set_cpu_plls(clk);

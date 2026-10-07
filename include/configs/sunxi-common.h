@@ -56,10 +56,18 @@
 
 #define CFG_SYS_INIT_RAM_ADDR	CONFIG_SUNXI_SRAM_ADDRESS
 /* FIXME: this may be larger on some SoCs */
+#if defined(CONFIG_MACH_SUN60I_A733)
+#define CFG_SYS_INIT_RAM_SIZE	0x4FF00 /* Keep stack within 320KB SRAM */
+#else
 #define CFG_SYS_INIT_RAM_SIZE	0x8000 /* 32 KiB */
+#endif
 
 #define PHYS_SDRAM_0			CFG_SYS_SDRAM_BASE
+#if defined(CONFIG_MACH_SUN60I_A733)
+#define PHYS_SDRAM_0_SIZE		CONFIG_SUNXI_DRAM_MAX_SIZE
+#else
 #define PHYS_SDRAM_0_SIZE		0x80000000 /* 2 GiB */
+#endif
 
 /****************************************************************************
  *           environment variables holding default load addresses           *
@@ -280,7 +288,7 @@
 	CONSOLE_STDIN_SETTINGS \
 	CONSOLE_STDOUT_SETTINGS
 
-#if defined(CONFIG_ARM64) || defined(CONFIG_RISCV)
+#if (defined(CONFIG_ARM64) || defined(CONFIG_RISCV)) && !defined(CONFIG_OF_UPSTREAM)
 #define FDTFILE "allwinner/" CONFIG_DEFAULT_DEVICE_TREE ".dtb"
 #else
 #define FDTFILE CONFIG_DEFAULT_DEVICE_TREE ".dtb"
