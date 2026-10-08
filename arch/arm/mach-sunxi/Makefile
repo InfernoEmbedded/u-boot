@@ -50,4 +50,34 @@ obj-$(CONFIG_DRAM_SUN50I_A133)	+= dram_sun50i_a133.o
 obj-$(CONFIG_DRAM_SUN50I_A133)	+= dram_timings/
 obj-$(CONFIG_MACH_SUN55I_A523)	+= dram_sun55i_a523.o dram_dw_helpers.o
 obj-$(CONFIG_DRAM_SUN55I_A523)	+= dram_timings/
+obj-$(CONFIG_MACH_SUN60I_A733)	+= dram_sun60i_a733.o
+
+ifdef CONFIG_MACH_SUN60I_A733
+ARC_CROSS_COMPILE ?= arc-linux-gnu-
+
+quiet_cmd_gen_pmu_fw = GENPMU  $@
+cmd_gen_pmu_fw = $(PYTHON3) $(srctree)/$(src)/pmu/build_pmu_fw.py \
+		--cross-compile $(ARC_CROSS_COMPILE) \
+		--src-dir $(srctree)/$(src)/pmu \
+		--out $@ $(if $(CONFIG_SUNXI_PMU_DEBUG_TELEMETRY),--debug-telemetry) \
+		$(if $(CONFIG_SUNXI_PMU_SINGLE_RANK),--single-rank) \
+		$(if $(CONFIG_SUNXI_PMU_FAST_DELAYS),--fast-delays)
+
+$(obj)/dram_sun60i_a733_fw.h: $(src)/pmu/lpddr5_pmu_internal.h \
+                              $(src)/pmu/pmu_primitives.c \
+                              $(src)/pmu/pmu_clock.c \
+                              $(src)/pmu/pmu_telemetry.c \
+                              $(src)/pmu/pmu_cbt.c \
+                              $(src)/pmu/pmu_deskew.c \
+                              $(src)/pmu/pmu_eye.c \
+                              $(src)/pmu/pmu_train.c \
+                              $(src)/pmu/dwc_ddrphy_pmu_regs.h \
+                              $(src)/pmu/sunxi_pmu_abi.h \
+                              $(src)/pmu/pmu.ld \
+                              $(src)/pmu/build_pmu_fw.py
+	$(call cmd,gen_pmu_fw)
+
+$(obj)/dram_sun60i_a733.o: $(obj)/dram_sun60i_a733_fw.h
+CFLAGS_dram_sun60i_a733.o += -I$(obj)
+endif
 endif
