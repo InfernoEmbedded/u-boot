@@ -222,7 +222,8 @@ and calibration stages the PMU microsequencer executes:
 
 * **PMU_SEQ_FAST_BOOT (0x1001)**:
   Combines ``PMU_SEQ_DEV_INIT`` (Bit 0) and ``PMU_SEQ_LPCA_INIT`` (Bit 12).
-  Initializes PHY PLLs, pad drivers, and Command/Address training.
+  Initializes PHY PLLs, pad drivers, and Command/Address training in ~6.6 ms.
+  SPL then restores cached timing registers, avoiding the full multi-second sweep.
 * **PMU_SEQ_FULL_TRAIN (0x125f)**:
   Executes the complete calibration pipeline (~2.42s):
   - **Bit 0 (DEV_INIT)**: Device init, PLL lock, Command Bus Training (CBT) entry, ZQ cal.
@@ -264,6 +265,28 @@ Execution & Handshake Sequence
    - SPL completes handshake: writes ``0x0`` to ``PMU_REG_HANDOFF_1``, waits for ack,
      then writes ``0x1`` to ``PMU_REG_HANDOFF_1`` and ``PMU_REG_RESET``.
    - SPL reclaims APB bus ownership: ``writew(0x0, 0x0aaa0000)``.
+
+Two-Tier DRAM Timing Cache
+--------------------------
+Full PMU matrix calibration sweeps 128 delay taps across all data bytes and
+channels, requiring approximately 2.42 seconds. To achieve sub-10ms fast boot
+while retaining optimal memory timing stability, U-Boot SPL implements a
+two-tier timing cache:
+
+* **Tier 1 (Retention SRAM at 0x0008f000)**:
+  SRAM retention banks remain powered during warm resets and low-power standby.
+  SPL validates the cache header magic (``0x4452414d``), version, clock frequency,
+  and CRC32. If valid, the PMU is invoked in fast-boot mode (``PMU_SEQ_FAST_BOOT``,
+  ~6.6 ms) for device/LPCA init, and the cached trained PHY registers are restored.
+* **Tier 2 (SPI NOR Flash at offset 0x003f0000 / Sector 1008)**:
+  On cold power-on, SRAM retention is lost. SPL probes SPI NOR flash at offset
+  ``0x003f0000`` (4032 KiB). If a valid cache image matching the current board
+  configuration is found, timings are restored in ~8 ms total.
+* **Fallback & Cache Population**:
+  If both caches are invalid (first boot or flash erase), SPL triggers a full
+  PMU calibration sweep (``PMU_SEQ_FULL_TRAIN``). Upon completion, SPL snapshots
+  the trained PHY registers and commits the resulting cache image to both
+  Retention SRAM and SPI NOR flash, ensuring subsequent boots use Tier 1 or Tier 2.
 
 Diagnostics & Telemetry
 -----------------------
