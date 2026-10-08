@@ -18,6 +18,7 @@
 #include <linux/string.h>
 #include <asm/armv8/mmu.h>
 #include <hang.h>
+#include <asm/arch/spl_spi.h>
 
 /*
  * IOMEM access macro
@@ -33,6 +34,7 @@
 #define DRAM_CACHE_MAGIC       0x4452414d  /* "DRAM" */
 #define DRAM_CACHE_VERSION     4
 #define DRAM_CACHE_FLAGS_DEFAULT 3
+#define DRAM_CACHE_SPI_SECTOR  0x003f0000  /* 4032 KB offset in SPI NOR (sector 1008) */
 #define DRAM_RETENTION_SRAM    0x0008f000  /* Free on-chip SRAM before stack */
 #define DRAM_TRAINED_SNAPSHOT_BUF 0x00080000UL /* Staging buffer for PHY register snapshot */
 #define DRAM_CACHE_MAX_REGS    600
@@ -694,6 +696,51 @@ static bool dram_check_tier1_retention(u32 dram_clk, u32 dram_type)
  * directly into the PHY CSRs, bypassing the full PMU training sweep to boot
  * in ~6.6 ms.
  */
+/**
+ * dram_load_tier2_spinor() - Load Tier 2 DRAM training cache from SPI NOR flash
+ * @dram_clk: Expected DRAM clock frequency in MHz
+ * @dram_type: Expected DRAM type identifier
+ *
+ * Reads 4KB from SPI NOR sector 0x003f0000 via SPI0 controller, validates
+ * magic, version, frequency, type, and payload CRC32.
+ *
+ * Return: true if valid Tier 2 cache found and loaded, false otherwise.
+ */
+static bool dram_load_tier2_spinor(u32 dram_clk, u32 dram_type)
+{
+	struct dram_cache_header *hdr = (struct dram_cache_header *)DRAM_RETENTION_SRAM;
+	u8 *buf = (u8 *)DRAM_RETENTION_SRAM;
+
+	spi0_init();
+	spi0_read_data(buf, DRAM_CACHE_SPI_SECTOR, 4096);
+	spi0_deinit();
+
+	if (hdr->magic != DRAM_CACHE_MAGIC ||
+	    hdr->version != DRAM_CACHE_VERSION ||
+	    hdr->dram_clk != dram_clk ||
+	    hdr->dram_type != dram_type ||
+	    hdr->pmu_status != PMU_STATUS_SUCCESS ||
+	    hdr->reg_count == 0 ||
+	    hdr->reg_count > DRAM_CACHE_MAX_REGS ||
+	    hdr->data_size != hdr->reg_count * sizeof(struct dram_trained_reg)) {
+		printf("DRAM [Tier 2]: SPI NOR cache not found (magic=0x%08x, v=%u, clk=%u)\n",
+		       hdr->magic, hdr->version, hdr->dram_clk);
+		return false;
+	}
+
+	u8 *payload = buf + sizeof(*hdr);
+	u32 crc = calc_crc32(0, payload, hdr->data_size);
+	if (crc != hdr->crc32) {
+		printf("DRAM [Tier 2]: SPI NOR cache CRC mismatch (exp 0x%08x, got 0x%08x)\n",
+		       hdr->crc32, crc);
+		return false;
+	}
+
+	printf("DRAM [Tier 2]: Valid SPI NOR training cache found (boot_count=%u, %u regs, CRC=0x%08x)!\n",
+	       hdr->boot_count, hdr->reg_count, crc);
+	return true;
+}
+
 static void dram_apply_cached_training(void)
 {
 	const struct dram_cache_header *hdr = (const struct dram_cache_header *)DRAM_RETENTION_SRAM;
@@ -778,15 +825,16 @@ static void dram_collect_trained_regs(void)
 }
 
 /**
- * dram_save_cache_tier1() - Persist trained register cache to Tier 1 retention SRAM
+ * dram_save_cache_both_tiers() - Persist trained register cache to Tier 1 & 2
  * @dram_clk: Operating DRAM clock frequency in MHz
  * @dram_type: Operating DRAM type identifier
  * @geom: Pointer to DRAM geometry structure containing probed geometry
  *
- * Formats the cache header, computes payload CRC32, and commits the cache image to
- * Tier 1 retention SRAM.
+ * Formats the cache header, computes payload CRC32, updates Tier 1 retention
+ * SRAM and RTC general purpose register, and writes the cache image to
+ * Tier 2 SPI NOR flash sector 0x003f0000.
  */
-static void dram_save_cache_tier1(u32 dram_clk, u32 dram_type, const struct dram_geometry *geom)
+static void dram_save_cache_both_tiers(u32 dram_clk, u32 dram_type, const struct dram_geometry *geom)
 {
 	struct dram_cache_header *hdr = (struct dram_cache_header *)DRAM_RETENTION_SRAM;
 	struct dram_trained_reg *regs = (struct dram_trained_reg *)(DRAM_RETENTION_SRAM + sizeof(*hdr));
@@ -812,6 +860,28 @@ static void dram_save_cache_tier1(u32 dram_clk, u32 dram_type, const struct dram
 
 	debug("DRAM [Tier 1]: Saved training state to Retention SRAM (%u regs, CRC=0x%08x)\n",
 	      hdr->reg_count, hdr->crc32);
+
+	/* Save Tier 2: SPI NOR Flash */
+	debug("DRAM [Tier 2]: Saving training cache to SPI NOR sector 0x%08x...\n", DRAM_CACHE_SPI_SECTOR);
+	spi0_init();
+	int ret = spi0_erase_sector(DRAM_CACHE_SPI_SECTOR);
+	if (ret == 0) {
+		ret = spi0_write_data(DRAM_CACHE_SPI_SECTOR, (void *)hdr, sizeof(*hdr) + hdr->data_size);
+		if (ret == 0) {
+			struct dram_cache_header vhdr;
+			spi0_read_data(&vhdr, DRAM_CACHE_SPI_SECTOR, sizeof(vhdr));
+			if (vhdr.magic == DRAM_CACHE_MAGIC && vhdr.crc32 == hdr->crc32)
+				debug("DRAM [Tier 2]: Successfully persisted and verified training cache to SPI NOR flash!\n");
+			else
+				printf("DRAM [Tier 2]: SPI NOR write verification FAILED (read magic=0x%08x, CRC=0x%08x, exp 0x%08x, 0x%08x)\n",
+				       vhdr.magic, vhdr.crc32, DRAM_CACHE_MAGIC, hdr->crc32);
+		} else {
+			printf("DRAM [Tier 2]: SPI write failed (%d)\n", ret);
+		}
+	} else {
+		printf("DRAM [Tier 2]: SPI erase failed (%d)\n", ret);
+	}
+	spi0_deinit();
 }
 
 /**
@@ -1027,8 +1097,11 @@ static int mctl_phy_init(u32 dram_clk, u32 dram_type, bool force_training, bool 
 	}
 
 	if (IS_ENABLED(CONFIG_SUNXI_PMU_TRAINING_CACHE) && !force_training) {
-		if (dram_check_tier1_retention(dram_clk, dram_type))
+		if (dram_check_tier1_retention(dram_clk, dram_type)) {
 			use_cache = true;
+		} else if (dram_load_tier2_spinor(dram_clk, dram_type)) {
+			use_cache = true;
+		}
 	}
 
 	/* 1. Pre-IMEM PHY setup & DMC / uMCTL2 channel configuration (Boot0 writes 0..253) */
@@ -2417,8 +2490,8 @@ unsigned long sunxi_dram_init(void)
 
 	if (IS_ENABLED(CONFIG_SUNXI_PMU_TRAINING_CACHE)) {
 		if (fresh_trained) {
-			debug("DRAM: Fresh training passed. Persisting cache to Tier 1 (Retention SRAM)...\n");
-			dram_save_cache_tier1(dram_clk, dram_type, &geom);
+			debug("DRAM: Fresh training passed. Persisting cache to Tier 1 (Retention SRAM) and Tier 2 (SPI NOR)...\n");
+			dram_save_cache_both_tiers(dram_clk, dram_type, &geom);
 		} else {
 			struct dram_cache_header *hdr = (struct dram_cache_header *)DRAM_RETENTION_SRAM;
 
