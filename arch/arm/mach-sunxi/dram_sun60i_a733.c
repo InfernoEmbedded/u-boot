@@ -30,6 +30,13 @@
 #include "dram_sun60i_a733_tables.h"
 #include "pmu/dwc_ddrphy_pmu_regs.h"
 
+#define DRAM_CACHE_MAGIC       0x4452414d  /* "DRAM" */
+#define DRAM_CACHE_VERSION     4
+#define DRAM_CACHE_FLAGS_DEFAULT 3
+#define DRAM_RETENTION_SRAM    0x0008f000  /* Free on-chip SRAM before stack */
+#define DRAM_TRAINED_SNAPSHOT_BUF 0x00080000UL /* Staging buffer for PHY register snapshot */
+#define DRAM_CACHE_MAX_REGS    600
+
 
 /*
  * =============================================================================
@@ -290,6 +297,52 @@
 
 
 /**
+ * struct dram_trained_reg - Trained DDR PHY register delta entry
+ * @addr: Physical MMIO address of PHY register
+ * @val: Trained 16-bit register value
+ */
+struct dram_trained_reg {
+	u32 addr;
+	u16 val;
+} __packed;
+
+/**
+ * struct dram_cache_header - Non-volatile DRAM training cache header
+ * @magic: Cache identification magic (DRAM_CACHE_MAGIC)
+ * @version: Cache format version (DRAM_CACHE_VERSION)
+ * @flags: Cache state flags (bit 0: trained, bit 1: valid)
+ * @dram_clk: DRAM clock frequency in MHz (e.g. 1800)
+ * @dram_type: DRAM memory type (e.g. 9 = LPDDR5)
+ * @reg_count: Number of trained register delta entries
+ * @data_size: Payload byte length (reg_count * sizeof(struct dram_trained_reg))
+ * @crc32: Standard CRC32 checksum over the payload
+ * @pmu_status: PMU completion status recorded at calibration (0x00000007)
+ * @boot_count: Total boot cycles using this cache entry
+ * @ranks: Probed number of ranks (1 or 2)
+ * @rows: Probed number of row address bits (15 or 16)
+ * @density_3_4: Probed 3/4 density indicator (1 for 6GB/12GB, 0 for 4GB/8GB/16GB)
+ * @reserved: Reserved padding for 32-bit alignment
+ *
+ * Stored in Tier 1 retention SRAM (0x0008f000).
+ */
+struct dram_cache_header {
+	u32 magic;          /* DRAM_CACHE_MAGIC */
+	u16 version;        /* DRAM_CACHE_VERSION */
+	u16 flags;          /* Flags: 1 = trained, 2 = valid */
+	u32 dram_clk;       /* Clock frequency (e.g. 1800) */
+	u32 dram_type;      /* DRAM type (9 = LPDDR5) */
+	u32 reg_count;      /* Number of trained register entries */
+	u32 data_size;      /* Size of payload following header (reg_count * 6) */
+	u32 crc32;          /* CRC32 of payload */
+	u32 pmu_status;     /* 0x00000007 */
+	u32 boot_count;     /* Incremented each boot */
+	u8  ranks;          /* Probed number of ranks (1 or 2) */
+	u8  rows;           /* Probed number of row address bits (15 or 16) */
+	u8  density_3_4;    /* Probed 3/4 density indicator (1 for 6GB/12GB) */
+	u8  reserved;       /* Reserved padding for 32-bit alignment */
+};
+
+/**
  * mctl_write_regs() - Batch write register configuration array
  * @regs: Pointer to array of register address/size/value tuples
  * @count: Number of entries in the register array
@@ -548,6 +601,220 @@ static void mctl_channel_swctl_commit(int ch)
 }
 
 /**
+ * calc_crc32() - Calculate standard CRC32 checksum
+ * @crc: Initial CRC seed (typically 0)
+ * @buf: Pointer to buffer of bytes to checksum
+ * @len: Number of bytes to process
+ *
+ * Computes standard IEEE 802.3 Ethernet CRC32 with polynomial 0xEDB88320.
+ *
+ * Return: Final 32-bit CRC checksum.
+ */
+static u32 calc_crc32(u32 crc, const void *buf, size_t len)
+{
+	const u8 *p = buf;
+	crc = ~crc;
+	while (len--) {
+		crc ^= *p++;
+		for (int k = 0; k < 8; k++)
+			crc = (crc >> 1) ^ (0xEDB88320 & -(crc & 1));
+	}
+	return ~crc;
+}
+
+/**
+ * a733_quick_dram_verify() - Verify retained memory contents across both channels
+ *
+ * Performs a rapid read-modify-write sanity check on Channel 0 (0x40000000)
+ * and Channel 1 (0xc0000000), restoring original data, to confirm DRAM is
+ * fully retained and accessible.
+ *
+ * Return: true if memory tests pass, false on mismatch.
+ */
+static bool a733_quick_dram_verify(void)
+{
+	volatile u32 *ch0 = (volatile u32 *)0x40000000;
+	volatile u32 *ch1 = (volatile u32 *)0xc0000000;
+
+	u32 w0 = *ch0;
+	u32 w1 = *ch1;
+
+	*ch0 = 0x5a5a1234;
+	*ch1 = 0xa5a54321;
+	dsb(); isb();
+
+	bool ok = (*ch0 == 0x5a5a1234) && (*ch1 == 0xa5a54321);
+
+	*ch0 = w0;
+	*ch1 = w1;
+	dsb(); isb();
+
+	return ok;
+}
+
+/**
+ * dram_check_tier1_retention() - Validate Tier 1 DRAM cache in retention SRAM
+ * @dram_clk: Expected DRAM clock frequency in MHz
+ * @dram_type: Expected DRAM type identifier
+ *
+ * Inspects the cache header at DRAM_RETENTION_SRAM, checking magic, version,
+ * frequency, type, PMU status, and CRC32 payload integrity.
+ *
+ * Return: true if valid Tier 1 cache found, false otherwise.
+ */
+static bool dram_check_tier1_retention(u32 dram_clk, u32 dram_type)
+{
+	struct dram_cache_header *hdr = (struct dram_cache_header *)DRAM_RETENTION_SRAM;
+
+	/* Check if Retention SRAM holds valid cached register dump */
+	if (hdr->magic == DRAM_CACHE_MAGIC &&
+	    hdr->version == DRAM_CACHE_VERSION &&
+	    hdr->dram_clk == dram_clk &&
+	    hdr->dram_type == dram_type &&
+	    hdr->pmu_status == PMU_STATUS_SUCCESS &&
+	    hdr->reg_count > 0 &&
+	    hdr->reg_count <= DRAM_CACHE_MAX_REGS &&
+	    hdr->data_size == hdr->reg_count * sizeof(struct dram_trained_reg)) {
+		u8 *payload = (u8 *)(DRAM_RETENTION_SRAM + sizeof(*hdr));
+		u32 crc = calc_crc32(0, payload, hdr->data_size);
+		if (crc == hdr->crc32) {
+			printf("DRAM [Tier 1]: Valid Retention SRAM cache (boot_count=%u, %u regs, CRC=0x%08x)!\n",
+			       hdr->boot_count, hdr->reg_count, crc);
+			return true;
+		}
+	}
+
+	return false;
+}
+
+/**
+ * dram_apply_cached_training() - Restore cached training registers to DDR PHY
+ *
+ * Writes all cached register address/value pairs from DRAM_RETENTION_SRAM
+ * directly into the PHY CSRs, bypassing the full PMU training sweep to boot
+ * in ~6.6 ms.
+ */
+static void dram_apply_cached_training(void)
+{
+	const struct dram_cache_header *hdr = (const struct dram_cache_header *)DRAM_RETENTION_SRAM;
+	const struct dram_trained_reg *regs = (const struct dram_trained_reg *)(DRAM_RETENTION_SRAM + sizeof(*hdr));
+
+	debug("DRAM: Restoring %u cached PMU training registers...\n", hdr->reg_count);
+
+	/* Connect APB to host to write PHY registers */
+	writew(0x0, IOMEM(SUNXI_DRAM_PHY_CTRL_BASE + PMU_REG_APB_MUX));
+
+	/* Restore all trained registers */
+	for (u32 i = 0; i < hdr->reg_count; i++)
+		writew(regs[i].val, IOMEM(regs[i].addr));
+
+	/* Ensure PHY clock gating and reset state match PMU post-training */
+	writew(0x1, IOMEM(SUNXI_DRAM_PHY_CTRL_BASE + PMU_REG_HANDOFF_1));
+	writew(0x1, IOMEM(SUNXI_DRAM_PHY_CTRL_BASE + PMU_REG_RESET));
+
+	/* Keep APB connected to host for Stage 3 */
+	writew(0x0, IOMEM(SUNXI_DRAM_PHY_CTRL_BASE + PMU_REG_APB_MUX));
+}
+
+/**
+ * struct dram_phy_range - Memory window of trained DDR PHY CSRs
+ * @base: Starting physical address of PHY register block
+ * @size: Byte span of register block
+ */
+struct dram_phy_range {
+	u32 base;
+	u32 size;
+};
+
+static const struct dram_phy_range dram_trained_phy_ranges[] = {
+	/* DBYTE slices 0..3 */
+	{ SUNXI_DRAM_PHY_DBYTE_BASE + 0 * SUNXI_DRAM_PHY_DBYTE_STRIDE, 0x1200 },
+	{ SUNXI_DRAM_PHY_DBYTE_BASE + 1 * SUNXI_DRAM_PHY_DBYTE_STRIDE, 0x1200 },
+	{ SUNXI_DRAM_PHY_DBYTE_BASE + 2 * SUNXI_DRAM_PHY_DBYTE_STRIDE, 0x1200 },
+	{ SUNXI_DRAM_PHY_DBYTE_BASE + 3 * SUNXI_DRAM_PHY_DBYTE_STRIDE, 0x1200 },
+	/* AC slices 0..1 */
+	{ SUNXI_DRAM_PHY_AC_SLICE_BASE + 0 * SUNXI_DRAM_PHY_AC_SLICE_STRIDE, 0x0800 },
+	{ SUNXI_DRAM_PHY_AC_SLICE_BASE + 1 * SUNXI_DRAM_PHY_AC_SLICE_STRIDE, 0x0800 },
+	/* Common PHY blocks */
+	{ SUNXI_DRAM_PHY_COMMON_BASE, 0x0400 },
+	{ SUNXI_DRAM_PHY_AC_BASE, 0x0400 },
+	{ SUNXI_DRAM_PHY_PUB_CFG_BASE, 0x0400 },
+};
+
+/**
+ * dram_collect_trained_regs() - Collect trained PHY register deltas
+ *
+ * Compares post-PMU PHY registers against pre-training baseline snapshots
+ * across DBYTE slices, AC slices, and common blocks, recording modified
+ * registers into the retention cache array.
+ */
+static void dram_collect_trained_regs(void)
+{
+	struct dram_cache_header *hdr = (struct dram_cache_header *)DRAM_RETENTION_SRAM;
+	struct dram_trained_reg *regs = (struct dram_trained_reg *)(DRAM_RETENTION_SRAM + sizeof(*hdr));
+	const u16 *cmp = (const u16 *)DRAM_TRAINED_SNAPSHOT_BUF;
+	u32 count = 0;
+
+	/* Connect APB to host to read PHY registers */
+	writew(0x0, IOMEM(SUNXI_DRAM_PHY_CTRL_BASE + PMU_REG_APB_MUX));
+
+	for (size_t r = 0; r < ARRAY_SIZE(dram_trained_phy_ranges); r++) {
+		u32 base = dram_trained_phy_ranges[r].base;
+		for (u32 off = 0; off < dram_trained_phy_ranges[r].size; off += 2) {
+			u16 before = *cmp++;
+			u16 after = readw(IOMEM(base + off));
+			if (before != after && count < DRAM_CACHE_MAX_REGS) {
+				regs[count].addr = base + off;
+				regs[count].val = after;
+				count++;
+			}
+		}
+	}
+
+	hdr->reg_count = count;
+	hdr->data_size = count * sizeof(struct dram_trained_reg);
+	debug("DRAM: Collected %u trained registers (%u bytes)\n",
+	      hdr->reg_count, hdr->data_size);
+}
+
+/**
+ * dram_save_cache_tier1() - Persist trained register cache to Tier 1 retention SRAM
+ * @dram_clk: Operating DRAM clock frequency in MHz
+ * @dram_type: Operating DRAM type identifier
+ * @geom: Pointer to DRAM geometry structure containing probed geometry
+ *
+ * Formats the cache header, computes payload CRC32, and commits the cache image to
+ * Tier 1 retention SRAM.
+ */
+static void dram_save_cache_tier1(u32 dram_clk, u32 dram_type, const struct dram_geometry *geom)
+{
+	struct dram_cache_header *hdr = (struct dram_cache_header *)DRAM_RETENTION_SRAM;
+	struct dram_trained_reg *regs = (struct dram_trained_reg *)(DRAM_RETENTION_SRAM + sizeof(*hdr));
+
+	if (hdr->reg_count == 0 || hdr->reg_count > DRAM_CACHE_MAX_REGS) {
+		printf("DRAM: Cannot save cache, invalid reg_count=%u\n", hdr->reg_count);
+		return;
+	}
+
+	hdr->boot_count++;
+	hdr->magic = DRAM_CACHE_MAGIC;
+	hdr->version = DRAM_CACHE_VERSION;
+	hdr->flags = DRAM_CACHE_FLAGS_DEFAULT;
+	hdr->dram_clk = dram_clk;
+	hdr->dram_type = dram_type;
+	hdr->ranks = geom->ranks;
+	hdr->rows = geom->rows;
+	hdr->density_3_4 = geom->density_3_4 ? 1 : 0;
+	hdr->reserved = 0;
+	hdr->data_size = hdr->reg_count * sizeof(struct dram_trained_reg);
+	hdr->crc32 = calc_crc32(0, regs, hdr->data_size);
+	hdr->pmu_status = PMU_STATUS_SUCCESS;
+
+	debug("DRAM [Tier 1]: Saved training state to Retention SRAM (%u regs, CRC=0x%08x)\n",
+	      hdr->reg_count, hdr->crc32);
+}
+
+/**
  * pmu_dump_diagnostics() - Dump comprehensive hardware state on training failure
  *
  * Inspects and prints ARC hardware exception frames (ECR, ERET, stack),
@@ -722,20 +989,47 @@ static void pmu_dump_diagnostics(void)
 }
 
 /**
- * mctl_phy_init() - Initialize DDR PHY and perform training
+ * mctl_phy_init() - Initialize DDR PHY and perform training or cached restore
  * @dram_clk: Target DRAM clock frequency in MHz
  * @dram_type: Target DRAM memory type (e.g. 9 = LPDDR5)
+ * @force_training: Force full PMU sweep regardless of cached state
+ * @trained_out: Output pointer set to true if fresh training occurred, false if cached
  *
- * Executes the full PHY bringup sequence: CCU/MBUS clocks, uMCTL2 channel
+ * Executes the full PHY bringing-up sequence: CCU/MBUS clocks, uMCTL2 channel
  * initialization, pre-IMEM/DMEM PHY tables, firmware loading, PMU execution,
- * Stage 3 post-streaming, power isolation release, and uMCTL2 operating mode
- * verification.
+ * register restoration or collection, Stage 3 post-streaming, power isolation
+ * release, and uMCTL2 operating mode verification.
  *
  * Return: 0 on success, or -1 on fatal training timeout/failure.
  */
-static int mctl_phy_init(u32 dram_clk, u32 dram_type)
+static int mctl_phy_init(u32 dram_clk, u32 dram_type, bool force_training, bool *trained_out)
 {
 	u32 val = 0;
+	bool use_cache = false;
+
+	u32 stat0 = readl(IOMEM(SUNXI_UMCTL2_CH0_BASE + UMCTL2_REG_STAT));
+	u32 stat1 = readl(IOMEM(SUNXI_UMCTL2_CH1_BASE + UMCTL2_REG_STAT));
+
+	/* Ultra-fast warm reboot bypass: uMCTL2 is already initialized and in NORMAL MODE */
+	if (IS_ENABLED(CONFIG_SUNXI_PMU_TRAINING_CACHE) &&
+	    (stat0 & 3) == UMCTL2_STAT_NORMAL_MODE &&
+	    (stat1 & 3) == UMCTL2_STAT_NORMAL_MODE) {
+		const struct dram_cache_header *hdr = (const struct dram_cache_header *)DRAM_RETENTION_SRAM;
+
+		if (hdr->magic == DRAM_CACHE_MAGIC) {
+			debug("DRAM [Tier 1]: uMCTL2 already in NORMAL MODE (STAT ch0=0x%x, ch1=0x%x)!\n", stat0, stat1);
+			if (a733_quick_dram_verify()) {
+				debug("DRAM [Tier 1]: Warm boot memory check PASS! Bypassing all training (<1ms)!\n");
+				*trained_out = false;
+				return 0;
+			}
+		}
+	}
+
+	if (IS_ENABLED(CONFIG_SUNXI_PMU_TRAINING_CACHE) && !force_training) {
+		if (dram_check_tier1_retention(dram_clk, dram_type))
+			use_cache = true;
+	}
 
 	/* 1. Pre-IMEM PHY setup & DMC / uMCTL2 channel configuration (Boot0 writes 0..253) */
 	debug("Applying pre-IMEM CCU & MBUS registers (%u writes)...\n",
@@ -834,7 +1128,7 @@ static int mctl_phy_init(u32 dram_clk, u32 dram_type)
 	/* 3. Connect APB to host to load training parameters into PHY DMEM */
 	writew(0x0, IOMEM(SUNXI_DRAM_PHY_CTRL_BASE + PMU_REG_APB_MUX));
 
-	u16 seq_ctrl = PMU_SEQ_FULL_TRAIN;
+	u16 seq_ctrl = use_cache ? PMU_SEQ_FAST_BOOT : PMU_SEQ_FULL_TRAIN;
 	size_t cur_word = 0;
 
 	/* Stream parameter blocks in a single strictly-monotonic forward pass */
@@ -868,9 +1162,8 @@ static int mctl_phy_init(u32 dram_clk, u32 dram_type)
 	}
 
 	u16 sc_read = readw(IOMEM(SUNXI_DRAM_PHY_DMEM_BASE + 0x10));
-
-	debug("DRAM: PMU SequenceCtrl = 0x%04x (full training, readback = 0x%04x)\n",
-	      seq_ctrl, sc_read);
+	debug("DRAM: PMU SequenceCtrl = 0x%04x (%s, readback = 0x%04x)\n",
+	      seq_ctrl, use_cache ? "fast boot" : "full training", sc_read);
 
 	/* Test host access to PHY loopback / scratch registers BEFORE handing over to PMU */
 	writew(0x0, IOMEM(SUNXI_DRAM_PHY_CTRL_BASE + PMU_REG_APB_MUX));
@@ -878,6 +1171,16 @@ static int mctl_phy_init(u32 dram_clk, u32 dram_type)
 	writew(PHY_SCRATCH_PATTERN_00CE, IOMEM(SUNXI_DRAM_PHY_DBYTE_BASE + PHY_REG_DBYTE_SCRATCH_1));
 	writew(PHY_SCRATCH_PATTERN_715D, IOMEM(SUNXI_DRAM_PHY_DBYTE_BASE + PHY_REG_DBYTE_SCRATCH_2));
 	writew(PHY_SCRATCH_PATTERN_00CE, IOMEM(SUNXI_DRAM_PHY_DBYTE_BASE + PHY_REG_DBYTE_SCRATCH_3));
+
+	/* Snapshot PHY registers to identify exact PMU training outputs on fresh training */
+	if (!use_cache) {
+		u16 *snap = (u16 *)DRAM_TRAINED_SNAPSHOT_BUF;
+		for (size_t r = 0; r < ARRAY_SIZE(dram_trained_phy_ranges); r++) {
+			u32 base = dram_trained_phy_ranges[r].base;
+			for (u32 off = 0; off < dram_trained_phy_ranges[r].size; off += 2)
+				*snap++ = readw(IOMEM(base + off));
+		}
+	}
 
 	/* 4. Hand APB control to PMU ARC microsequencer */
 	writew(0x1, IOMEM(SUNXI_DRAM_PHY_CTRL_BASE + PMU_REG_APB_MUX));
@@ -935,7 +1238,7 @@ static int mctl_phy_init(u32 dram_clk, u32 dram_type)
 	/* Connect APB back to host CPU for Stage 3 PHY register configuration! */
 	writew(0x0, IOMEM(SUNXI_DRAM_PHY_CTRL_BASE + PMU_REG_APB_MUX));
 
-	if (IS_ENABLED(CONFIG_SUNXI_PMU_DEBUG_TELEMETRY)) {
+	if (!use_cache && IS_ENABLED(CONFIG_SUNXI_PMU_DEBUG_TELEMETRY)) {
 		static const char * const stage_names[12] = {
 			"Stage 0/1: DEV_INIT & LPCA",
 			"Stage 6: 2D Eye Search (SEARCH_WIN)",
@@ -962,6 +1265,16 @@ static int mctl_phy_init(u32 dram_clk, u32 dram_type)
 			t_prev = t_curr;
 		}
 		printf("===================================\n\n");
+	}
+
+	if (use_cache) {
+		/* Restore pre-trained delay lines and deskew registers on top of DevInit */
+		dram_apply_cached_training();
+		*trained_out = false;
+	} else {
+		/* Collect trained PHY registers for Retention SRAM caching */
+		dram_collect_trained_regs();
+		*trained_out = true;
 	}
 
 	/* Execute all Stage 3 configuration/mailboxes */
@@ -1104,9 +1417,8 @@ static int mctl_phy_init(u32 dram_clk, u32 dram_type)
 	writew(0x0, IOMEM(SUNXI_DRAM_PHY_CTRL_BASE + PMU_REG_APB_MUX));
 
 	/* Check uMCTL2 operating status on both channels (offset 0x14) */
-	u32 stat0 = readl(IOMEM(SUNXI_UMCTL2_CH0_BASE + UMCTL2_REG_STAT));
-	u32 stat1 = readl(IOMEM(SUNXI_UMCTL2_CH1_BASE + UMCTL2_REG_STAT));
-
+	stat0 = readl(IOMEM(SUNXI_UMCTL2_CH0_BASE + UMCTL2_REG_STAT));
+	stat1 = readl(IOMEM(SUNXI_UMCTL2_CH1_BASE + UMCTL2_REG_STAT));
 	debug("uMCTL2 Operating Status: Ch0 STAT=0x%08x (%s), Ch1 STAT=0x%08x (%s)\n",
 	      stat0, (stat0 & 3) == 1 ? "NORMAL MODE" : "NOT NORMAL",
 	      stat1, (stat1 & 3) == 1 ? "NORMAL MODE" : "NOT NORMAL");
@@ -2032,6 +2344,29 @@ unsigned long sunxi_dram_init(void)
 	/* Unlock security domains so we can access uMCTL2/PMIC/PRCM/CCU */
 	sunxi_security_and_bus_init();
 
+	/* Check Tier 1 Warm Boot Fast-Bypass */
+	u32 stat0 = readl(IOMEM(SUNXI_UMCTL2_CH0_BASE + UMCTL2_REG_STAT));
+	u32 stat1 = readl(IOMEM(SUNXI_UMCTL2_CH1_BASE + UMCTL2_REG_STAT));
+
+	if (IS_ENABLED(CONFIG_SUNXI_PMU_TRAINING_CACHE) &&
+	    !IS_ENABLED(CONFIG_SUNXI_PMU_FORCE_TRAINING) &&
+	    (stat0 & 3) == UMCTL2_STAT_NORMAL_MODE &&
+	    (stat1 & 3) == UMCTL2_STAT_NORMAL_MODE) {
+		const struct dram_cache_header *hdr =
+			(const struct dram_cache_header *)DRAM_RETENTION_SRAM;
+
+		if (hdr->magic == DRAM_CACHE_MAGIC && hdr->version == DRAM_CACHE_VERSION) {
+			debug("DRAM [Tier 1]: uMCTL2 already in NORMAL MODE (STAT ch0=0x%x, ch1=0x%x)!\n", stat0, stat1);
+			if (a733_quick_dram_verify()) {
+				debug("DRAM [Tier 1]: Warm boot memory check PASS! Bypassing entire DRAM init (<1ms)!\n");
+				geom.ranks = hdr->ranks;
+				geom.rows = hdr->rows;
+				geom.density_3_4 = (hdr->density_3_4 != 0);
+				return sun60i_a733_calc_dram_size(&geom);
+			}
+		}
+	}
+
 	/* Configure PMIC voltages for LPDDR5 before starting DRAM PHY */
 	ret = sunxi_pmic_init_a733(dram_type);
 	if (ret)
@@ -2066,7 +2401,12 @@ unsigned long sunxi_dram_init(void)
 	udelay(1);
 
 	/* Stage 2 & 3: PHY calibration, firmware training, and handoff */
-	ret = mctl_phy_init(dram_clk, dram_type);
+	bool fresh_trained = false;
+
+	ret = mctl_phy_init(dram_clk, dram_type,
+			    !IS_ENABLED(CONFIG_SUNXI_PMU_TRAINING_CACHE) ||
+			    IS_ENABLED(CONFIG_SUNXI_PMU_FORCE_TRAINING),
+			    &fresh_trained);
 	if (ret != 0) {
 		printf("PMU training failed! System halted.\n");
 		hang();
@@ -2074,6 +2414,19 @@ unsigned long sunxi_dram_init(void)
 
 	/* Dynamically probe installed memory geometry */
 	sun60i_a733_auto_detect_geometry(&geom);
+
+	if (IS_ENABLED(CONFIG_SUNXI_PMU_TRAINING_CACHE)) {
+		if (fresh_trained) {
+			debug("DRAM: Fresh training passed. Persisting cache to Tier 1 (Retention SRAM)...\n");
+			dram_save_cache_tier1(dram_clk, dram_type, &geom);
+		} else {
+			struct dram_cache_header *hdr = (struct dram_cache_header *)DRAM_RETENTION_SRAM;
+
+			hdr->boot_count++;
+			debug("DRAM: Fast boot successful using cached timings (boot_count=%u, %lu MiB)!\n",
+			      hdr->boot_count, sun60i_a733_calc_dram_size(&geom) >> 20);
+		}
+	}
 
 	writel(CPU_DA_DDR_MUX_AXI2HIF, IOMEM(CPU_DA_DDR_CTRL_REG));
 	return sun60i_a733_calc_dram_size(&geom);

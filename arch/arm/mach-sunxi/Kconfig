@@ -758,6 +758,19 @@ endif
 
 if DRAM_SUN60I_A733
 
+config SUNXI_PMU_TRAINING_CACHE
+	bool "Cache trained PHY parameters for fast boot"
+	default y
+	help
+	  When enabled, stores trained DDR PHY delay lines and calibration
+	  registers. For warm boots, retains parameters in retention SRAM.
+
+config SUNXI_PMU_FORCE_TRAINING
+	bool "Force full PMU sweep regardless of cached state"
+	default n
+	help
+	  Bypasses any valid cached parameters and forces a fresh PMU sweep.
+
 config SUNXI_PMU_DEBUG_TELEMETRY
 	bool "Enable PMU training telemetry and trace streaming"
 	default n
