@@ -417,7 +417,7 @@ static int sunxi_mmc_send_cmd_common(struct sunxi_mmc_priv *priv,
 		goto out;
 
 	if (data) {
-		timeout_msecs = 120;
+		timeout_msecs = max(2000U, (data->blocks * data->blocksize) >> 7);
 		debug("cacl timeout %x msec\n", timeout_msecs);
 		error = mmc_rint_wait(priv, mmc, timeout_msecs,
 				      data->blocks > 1 ?
