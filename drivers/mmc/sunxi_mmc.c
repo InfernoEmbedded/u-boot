@@ -107,7 +107,8 @@ static int mmc_set_mod_clk(struct sunxi_mmc_priv *priv, unsigned int hz)
 		 * Adjust the calculation accordingly: 600 * hidden2 / 3 for
 		 * MMC0/1, and 600 * hidden2 / 3 * 2 for MMC2.
 		 */
-		if (IS_ENABLED(CONFIG_MACH_SUN55I_A523)) {
+		if (IS_ENABLED(CONFIG_MACH_SUN55I_A523) ||
+		    IS_ENABLED(CONFIG_MACH_SUN60I_A733)) {
 			pll_hz /= 3;
 			if (priv->mmc_no == 2)
 				pll_hz *= 2;
@@ -166,8 +167,9 @@ static int mmc_set_mod_clk(struct sunxi_mmc_priv *priv, unsigned int hz)
 			CCM_MMC_CTRL_SCLK_DLY(sclk_dly);
 	}
 
-	/* The A523 has a second divider, not a shift. */
-	if (IS_ENABLED(CONFIG_MACH_SUN55I_A523))
+	/* The A523/A733 has a second divider, not a shift. */
+	if (IS_ENABLED(CONFIG_MACH_SUN55I_A523) ||
+	    IS_ENABLED(CONFIG_MACH_SUN60I_A733))
 		n = (1U << n) - 1;
 
 	writel(CCM_MMC_CTRL_ENABLE| pll | CCM_MMC_CTRL_N(n) |
@@ -577,12 +579,12 @@ struct mmc *sunxi_mmc_init(int sdc_no)
 
 	if ((IS_ENABLED(CONFIG_MACH_SUN50I) || IS_ENABLED(CONFIG_MACH_SUN8I) ||
 	    IS_ENABLED(CONFIG_MACH_SUN9I) || IS_ENABLED(CONFIG_SUN50I_GEN_H6) ||
-	    IS_ENABLED(CONFIG_MACH_SUN55I_A523)) && (sdc_no == 2))
+	    IS_ENABLED(CONFIG_MACH_SUN55I_A523) || IS_ENABLED(CONFIG_MACH_SUN60I_A733)) &&
+	    (sdc_no == 2))
 		cfg->host_caps = MMC_MODE_8BIT;
 
 	cfg->host_caps |= MMC_MODE_HS_52MHz | MMC_MODE_HS;
 	cfg->b_max = CONFIG_SYS_MMC_MAX_BLK_COUNT;
-
 	cfg->f_min = 400000;
 	cfg->f_max = 52000000;
 
@@ -603,6 +605,10 @@ struct mmc *sunxi_mmc_init(int sdc_no)
 	writel(SUNXI_MMC_COMMON_CLK_GATE | SUNXI_MMC_COMMON_RESET,
 	       SUNXI_MMC_COMMON_BASE + 4 * sdc_no);
 #endif
+#elif defined(CONFIG_MACH_SUN60I_A733)
+	/* A733 has individual BGR registers per MMC channel */
+	setbits_le32(ccm + CCU_A733_MMC_BGR_REG(sdc_no),
+		     BIT(GATE_SHIFT) | BIT(RESET_SHIFT));
 #else /* CONFIG_SUN50I_GEN_H6 */
 	setbits_le32(ccm + CCU_H6_MMC_GATE_RESET, 1 << sdc_no);
 	/* unassert reset */
@@ -661,16 +667,25 @@ static const struct dm_mmc_ops sunxi_mmc_ops = {
 	.get_cd		= sunxi_mmc_getcd,
 };
 
+#if defined(CONFIG_MACH_SUN60I_A733)
+#define SUNXI_MMC_CLK_STRIDE		CCU_A733_MMC_CLK_STRIDE
+#else
+#define SUNXI_MMC_CLK_STRIDE		4
+#endif
+
 static unsigned get_mclk_offset(void)
 {
 	if (IS_ENABLED(CONFIG_MACH_SUN9I))
 		return 0x410;
 
+	if (IS_ENABLED(CONFIG_MACH_SUN60I_A733))
+		return CCU_A733_MMC_CLK_BASE;
+
 	if (IS_ENABLED(CONFIG_SUN50I_GEN_H6) || IS_ENABLED(CONFIG_SUNXI_GEN_NCAT2))
 		return 0x830;
 
 	return 0x88;
-};
+}
 
 static int sunxi_mmc_probe(struct udevice *dev)
 {
@@ -707,7 +722,8 @@ static int sunxi_mmc_probe(struct udevice *dev)
 	ccu_reg = (u32 *)(uintptr_t)ofnode_get_addr(args.node);
 
 	priv->mmc_no = ((uintptr_t)priv->reg - SUNXI_MMC0_BASE) / 0x1000;
-	priv->mclkreg = (void *)ccu_reg + get_mclk_offset() + priv->mmc_no * 4;
+	priv->mclkreg = (void *)ccu_reg + get_mclk_offset() +
+			priv->mmc_no * SUNXI_MMC_CLK_STRIDE;
 
 	ret = clk_get_by_name(dev, "ahb", &gate_clk);
 	if (!ret)
