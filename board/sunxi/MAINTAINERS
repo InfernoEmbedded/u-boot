@@ -648,3 +648,9 @@ F:	arch/arm/mach-sunxi/clock_sun50i_h6.c
 F:	arch/arm/dts/sun60i-a733*
 F:	include/dt-bindings/*/sun60i-a733*
 
+ORANGEPI 4 PRO BOARD
+M:	Alastair D'Silva <alastair@d-silva.org>
+S:	Maintained
+F:	configs/orangepi_4_pro_defconfig
+F:	arch/arm/dts/sun60i-a733-orangepi-4-pro.dts
+
