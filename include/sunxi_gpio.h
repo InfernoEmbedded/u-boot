@@ -182,6 +182,9 @@ enum sunxi_gpio_number {
 	#define SUNXI_GPIO_DISABLE	0x7
 #endif
 
+#define SUN60I_A733_PINCTRL_BANK_OFFSET	0x80
+#define SUN60I_A733_PINCTRL_BANK_SIZE	0x80
+
 /* GPIO pin pull-up/down config */
 #define SUNXI_GPIO_PULL_DISABLE	0
 #define SUNXI_GPIO_PULL_UP	1
