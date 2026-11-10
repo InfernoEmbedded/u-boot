@@ -62,6 +62,11 @@ config DRAM_SUN55I_A523
 	help
 	  Select this DRAM controller driver for A523/T527 SoCs.
 
+config DRAM_SUN60I_A733
+	bool
+	help
+	  Select this DRAM controller driver for A733/T736 SoCs.
+
 if DRAM_SUN50I_H616 || DRAM_SUN50I_A133 || DRAM_SUN55I_A523
 config DRAM_SUNXI_DX_ODT
 	hex "DRAM DX ODT parameter"
@@ -619,7 +624,7 @@ config ARM_BOOT_HOOK_RMR
 	  This allows both the SPL and the U-Boot proper to be entered in
 	  either mode and switch to AArch64 if needed.
 
-if SUNXI_DRAM_DW || DRAM_SUN50I_H6 || DRAM_SUN50I_H616 || DRAM_SUN50I_A133 || DRAM_SUN55I_A523
+if SUNXI_DRAM_DW || DRAM_SUN50I_H6 || DRAM_SUN50I_H616 || DRAM_SUN50I_A133 || DRAM_SUN55I_A523 || DRAM_SUN60I_A733
 config SUNXI_DRAM_DDR3
 	bool
 
@@ -632,11 +637,15 @@ config SUNXI_DRAM_LPDDR3
 config SUNXI_DRAM_LPDDR4
 	bool
 
+config SUNXI_DRAM_LPDDR5
+	bool
+
 config SUNXI_DRAM_DDR4
 	bool
 
 choice
 	prompt "DRAM Type and Timing"
+	default SUNXI_DRAM_A733_LPDDR5 if MACH_SUN60I_A733
 	default SUNXI_DRAM_A523_LPDDR4 if MACH_SUN55I_A523
 	default SUNXI_DRAM_DDR3_1333 if !MACH_SUN8I_V3S
 	default SUNXI_DRAM_DDR2_V3S if MACH_SUN8I_V3S
@@ -736,6 +745,14 @@ config SUNXI_DRAM_A523_LPDDR4
 	help
 	  This option is the LPDDR4 timing used by the stock boot0 by
 	  Allwinner.
+
+config SUNXI_DRAM_A733_LPDDR5
+	bool "LPDDR5 DRAM chips on the A733/T736 DRAM controller"
+	select SUNXI_DRAM_LPDDR5
+	depends on DRAM_SUN60I_A733
+	help
+	  This option selects the LPDDR5 DRAM controller and open-source ARC EM4
+	  PMU training firmware for Allwinner A733/T736 SoCs.
 endchoice
 endif
 
@@ -757,6 +774,7 @@ config DRAM_CLK
 	default 744 if MACH_SUN50I_H6
 	default 720 if MACH_SUN50I_H616 || MACH_SUN50I_A133
 	default 1200 if MACH_SUN55I_A523
+	default 1800 if MACH_SUN60I_A733
 	help
 	  Set the dram clock speed, valid range 240 - 480 (prior to sun9i),
 	  must be a multiple of 24. For the sun9i (A80), the tested values
@@ -776,6 +794,7 @@ config DRAM_ZQ
 	depends on !MACH_SUN50I_H616
 	depends on !MACH_SUN50I_A133
 	depends on !MACH_SUN55I_A523
+	depends on !MACH_SUN60I_A733
 	default 123 if MACH_SUN4I || MACH_SUN5I || MACH_SUN6I || \
 		       MACH_SUN8I_A23 || MACH_SUN8I_A33 || MACH_SUN8I_A83T
 	default 127 if MACH_SUN7I
@@ -790,6 +809,7 @@ config DRAM_ODT_EN
 	bool "sunxi dram odt enable"
 	depends on !MACH_SUN50I_H616
 	depends on !MACH_SUN55I_A523
+	depends on !MACH_SUN60I_A733
 	default y if MACH_SUN8I_A23
 	default y if MACH_SUNXI_H3_H5
 	default y if MACH_SUN8I_R40

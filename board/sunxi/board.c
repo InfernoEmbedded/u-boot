@@ -566,6 +566,10 @@ int mmc_get_env_dev(void)
 
 #ifdef CONFIG_XPL_BUILD
 
+__weak void board_add_ram_info(int use_default)
+{
+}
+
 static void sunxi_spl_store_dram_size(phys_addr_t dram_size)
 {
 	struct boot_file_head *spl = get_spl_header(SPL_DT_HEADER_VERSION);
@@ -674,7 +678,9 @@ void sunxi_board_init(void)
 #endif	/* CONFIG_AXPxxx_POWER */
 	printf("DRAM:");
 	gd->ram_size = sunxi_dram_init();
-	printf(" %d MiB\n", (int)(gd->ram_size >> 20));
+	printf(" %d MiB", (int)(gd->ram_size >> 20));
+	board_add_ram_info(0);
+	putc('\n');
 	if (!gd->ram_size)
 		hang();
 
