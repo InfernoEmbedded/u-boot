@@ -707,6 +707,19 @@ F:	drivers/pinctrl/sunxi/
 F:	drivers/video/sunxi/
 F:	tools/sunxi*
 
+ARM SUNXI A733 SOC
+M:	Alastair D'Silva <alastair@d-silva.org>
+S:	Maintained
+F:	arch/arm/dts/sun60i-a733*
+F:	arch/arm/mach-sunxi/dram_sun60i_a733*
+F:	arch/arm/mach-sunxi/pmu/
+F:	doc/board/allwinner/a733-pmu.rst
+F:	drivers/clk/sunxi/clk_a733*
+F:	drivers/pci/pcie_dw_sunxi.c
+F:	drivers/phy/allwinner/phy-sun60i-combophy.c
+F:	include/configs/sun60i.h
+F:	include/dt-bindings/*/allwinner,sun60i-a733*
+
 ARM TEGRA
 M:	Thierry Reding <treding@nvidia.com>
 M:	Svyatoslav Ryhel <clamor95@gmail.com>
