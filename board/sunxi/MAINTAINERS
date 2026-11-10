@@ -644,3 +644,21 @@ M:	Yu-Tung Chang <mtwget@gmail.com>
 S:	Maintained
 F:	configs/zeropi_defconfig
 F:	arch/arm/dts/sun8i-h3-zeropi.dts
+
+ALLWINNER A733 SOC
+M:	Alastair D'Silva <alastair@d-silva.org>
+S:	Maintained
+F:	arch/arm/dts/sun60i-a733*
+F:	arch/arm/mach-sunxi/dram_sun60i_a733*
+F:	arch/arm/mach-sunxi/pmu/
+F:	doc/board/allwinner/a733-pmu.rst
+F:	drivers/clk/sunxi/clk_a733.c
+F:	include/configs/sun60i.h
+F:	include/dt-bindings/*/allwinner,sun60i-a733*
+
+ORANGEPI 4 PRO BOARD
+M:	Alastair D'Silva <alastair@d-silva.org>
+S:	Maintained
+F:	arch/arm/dts/sun60i-a733-orangepi-4-pro.dts
+F:	configs/orangepi_4_pro_defconfig
+
