@@ -138,9 +138,16 @@ config CLK_SUN55I_A523
 
 config CLK_SUN55I_A523_R
 	bool "Clock driver for Allwinner A523 generation PRCM"
-	default MACH_SUN55I_A523
+	default MACH_SUN55I_A523 || MACH_SUN60I_A733
 	help
 	  This enables common clock driver support for the PRCM
-	  in Allwinner A523/T527 SoCs.
+	  in Allwinner A523/T527 and A733/T736 SoCs.
+
+config CLK_SUN60I_A733
+	bool "Clock driver for Allwinner A733/T736"
+	default MACH_SUN60I_A733
+	help
+	  This enables common clock driver support for platforms based
+	  on Allwinner A733/T736 SoC.
 
 endif # CLK_SUNXI
