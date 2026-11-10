@@ -145,6 +145,10 @@ static int gpio_init(void)
 	sunxi_gpio_set_cfgpin(SUNXI_GPB(9), 2);
 	sunxi_gpio_set_cfgpin(SUNXI_GPB(10), 2);
 	sunxi_gpio_set_pull(SUNXI_GPB(10), SUNXI_GPIO_PULL_UP);
+#elif CONFIG_CONS_INDEX == 1 && defined(CONFIG_MACH_SUN60I_A733)
+	sunxi_gpio_set_cfgpin(SUNXI_GPB(0), SUN60I_A733_GPB_UART0);
+	sunxi_gpio_set_cfgpin(SUNXI_GPB(1), SUN60I_A733_GPB_UART0);
+	sunxi_gpio_set_pull(SUNXI_GPB(1), SUNXI_GPIO_PULL_UP);
 #elif CONFIG_CONS_INDEX == 1 && defined(CONFIG_MACH_SUN8I_A83T)
 	sunxi_gpio_set_cfgpin(SUNXI_GPB(9), SUN8I_A83T_GPB_UART0);
 	sunxi_gpio_set_cfgpin(SUNXI_GPB(10), SUN8I_A83T_GPB_UART0);
@@ -198,8 +202,12 @@ static int gpio_init(void)
 	 * Update PIO power bias configuration by copying the hardware
 	 * detected value.
 	 */
-	if (IS_ENABLED(CONFIG_SUN50I_GEN_H6) ||
-	    IS_ENABLED(CONFIG_SUN50I_GEN_NCAT2)) {
+	if (IS_ENABLED(CONFIG_MACH_SUN60I_A733)) {
+		/* Ensure Bank F (SDC0) bias voltage is 3.3V (bit 5 = 0) */
+		clrbits_le32(SUNXI_PIO_BASE + SUN60I_A733_GPIO_POW_MOD_SEL,
+			     BIT(SUNXI_GPIO_F));
+	} else if (IS_ENABLED(CONFIG_SUN50I_GEN_H6) ||
+		   IS_ENABLED(CONFIG_SUNXI_GEN_NCAT2)) {
 		val = readl(SUNXI_PIO_BASE + SUN50I_H6_GPIO_POW_MOD_VAL);
 		/* TODO: A523: keep only the lower two bits? */
 		writel(val, SUNXI_PIO_BASE + SUN50I_H6_GPIO_POW_MOD_SEL);

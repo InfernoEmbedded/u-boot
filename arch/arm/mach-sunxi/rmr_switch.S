@@ -55,7 +55,7 @@ start32:
 	str	lr, [r0, #12]
 	mrc	p15, 0, lr, cr12, cr0, 0	// VBAR
 	str	lr, [r0, #16]
-//#ifdef CONFIG_MACH_SUN55I_A523
+//#if defined(CONFIG_MACH_SUN55I_A523) || defined(CONFIG_MACH_SUN60I_A733)
 	mrc	p15, 0, lr, cr12, cr12, 5	// ICC_SRE
 	tst	lr, #1
 	beq	1f
@@ -65,7 +65,22 @@ start32:
 	str	lr, [r0, #28]
 1:
 //#endif
-
+#if defined(CONFIG_MACH_SUN60I_A733)
+	ldr	r1, =0x08000200
+	mov	r2, #1
+	str	r2, [r1]			// CPU_DA_DDR_CTRL_REG = 1 (AXI2HIF)
+	ldr	r1, =0x08001000
+	mov	r2, #1
+	str	r2, [r1]			// CLU0_CPU0_CTRL_REG = 1 (AA64 mode)
+#ifdef CONFIG_XPL_BUILD
+	ldr	r0, =CONFIG_SPL_TEXT_BASE
+#else
+	ldr	r0, =CONFIG_TEXT_BASE
+#endif
+	str	r0, [r1, #4]			// CLU0_RVBARADDR0_L
+	mov	r2, #0
+	str	r2, [r1, #8]			// CLU0_RVBARADDR0_H = 0
+#else
 	ldr	r1, =CONFIG_SUNXI_RVBAR_ADDRESS
 	ldr	r0, =SUNXI_SRAMC_BASE
 	ldr	r0, [r0, #36]			// SRAM_VER_REG
@@ -77,6 +92,7 @@ start32:
 	ldr	r0, =CONFIG_TEXT_BASE
 #endif
 	str	r0, [r1]			// store start address in RVBAR
+#endif
 	dsb	sy
 	isb	sy
 	mrc	15, 0, r0, cr12, cr0, 2	@ read RMR register

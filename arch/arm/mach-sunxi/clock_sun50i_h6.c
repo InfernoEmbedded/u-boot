@@ -16,6 +16,9 @@ void clock_init_safe(void)
 	void *const ccm = (void *)SUNXI_CCM_BASE;
 	void *const prcm = (void *)SUNXI_PRCM_BASE;
 
+	if (IS_ENABLED(CONFIG_MACH_SUN60I_A733))
+		return;
+
 	if (IS_ENABLED(CONFIG_MACH_SUN50I_H616))
 		setbits_le32(prcm + CCU_PRCM_SYS_PWROFF_GATING, 0x10);
 	if (IS_ENABLED(CONFIG_MACH_SUN55I_A523))
@@ -77,6 +80,19 @@ void clock_init_safe(void)
 void clock_init_uart(void)
 {
 	void *const ccm = (void *)SUNXI_CCM_BASE;
+
+	if (IS_ENABLED(CONFIG_MACH_SUN60I_A733)) {
+		/* A733: APB1 (bus-uart) clock source is OSC24M / 1 */
+		writel(APB2_CLK_SRC_OSC24M |
+		       APB2_CLK_RATE_N_1 |
+		       APB2_CLK_RATE_M(1),
+		       ccm + CCU_A733_APB1_CFG);
+
+		/* Deassert reset and enable clock gate for console UART */
+		setbits_le32(ccm + CCU_A733_UART_BGR_REG(CONFIG_CONS_INDEX - 1),
+			     BIT(RESET_SHIFT) | BIT(GATE_SHIFT));
+		return;
+	}
 
 	/* uart clock source is apb2 */
 	writel(APB2_CLK_SRC_OSC24M|
@@ -199,6 +215,9 @@ void clock_set_pll1(unsigned int clk)
 
 	clk /= 24000000;
 
+	if (IS_ENABLED(CONFIG_MACH_SUN60I_A733))
+		return;
+
 	if (IS_ENABLED(CONFIG_MACH_SUN55I_A523))
 		clock_a523_set_cpu_plls(clk);
 	else
@@ -236,13 +255,22 @@ int clock_twi_onoff(int port, int state)
 unsigned int clock_get_pll6(void)
 {
 	void *const ccm = (void *)SUNXI_CCM_BASE;
-	uint32_t rval = readl(ccm + CCU_H6_PLL6_CFG);
-	int n = ((rval & CCM_PLL6_CTRL_N_MASK) >> CCM_PLL6_CTRL_N_SHIFT) + 1;
-	int div2 = ((rval & CCM_PLL6_CTRL_DIV2_MASK) >>
-		    CCM_PLL6_CTRL_DIV2_SHIFT) + 1;
-	int div1, m;
+	int div1, div2, m, n;
+	u32 rval;
 
-	if (IS_ENABLED(CONFIG_SUNXI_GEN_NCAT2)) {
+	if (IS_ENABLED(CONFIG_MACH_SUN60I_A733))
+		rval = readl(ccm + CCU_A733_PLL6_CFG);
+	else
+		rval = readl(ccm + CCU_H6_PLL6_CFG);
+
+	n = ((rval & CCM_PLL6_CTRL_N_MASK) >> CCM_PLL6_CTRL_N_SHIFT) + 1;
+	div2 = ((rval & CCM_PLL6_CTRL_DIV2_MASK) >>
+		CCM_PLL6_CTRL_DIV2_SHIFT) + 1;
+
+	if (IS_ENABLED(CONFIG_MACH_SUN60I_A733)) {
+		div1 = ((rval & CCM_A733_PLL6_CTRL_P0_MASK) >>
+			CCM_A733_PLL6_CTRL_P0_SHIFT) + 1;
+	} else if (IS_ENABLED(CONFIG_SUNXI_GEN_NCAT2)) {
 		div1 = ((rval & CCM_PLL6_CTRL_P0_MASK) >>
 			CCM_PLL6_CTRL_P0_SHIFT) + 1;
 	} else {
