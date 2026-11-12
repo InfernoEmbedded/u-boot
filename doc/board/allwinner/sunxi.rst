@@ -35,9 +35,9 @@ For more details, and alternative boot locations or installations, see below.
 
 Building Arm Trusted Firmware (TF-A)
 ------------------------------------
-Boards using a 64-bit Soc (A64, H5, H6, H616, R329) require the BL31 stage of
-the `Arm Trusted Firmware-A`_ firmware. This provides the reference
-implementation of secure software for Armv8-A, offering PSCI and SMCCC
+Boards using a 64-bit SoC (A64, H5, H6, H616, R329, A523, A733) require the
+BL31 stage of the `Arm Trusted Firmware-A`_ firmware. This provides the
+reference implementation of secure software for Armv8-A, offering PSCI and SMCCC
 services. Allwinner support is fully mainlined. To build bl31.bin::
 
   $ git clone https://git.trustedfirmware.org/TF-A/trusted-firmware-a.git
@@ -46,7 +46,8 @@ services. Allwinner support is fully mainlined. To build bl31.bin::
   $ export BL31=$(pwd)/build/sun50i_a64/debug/bl31.bin
 
 The target platform (``PLAT=``) for A64 and H5 SoCs is sun50i_a64, for the H6
-sun50i_h6, for the H616 sun50i_h616, and for the R329 sun50i_r329. Use::
+sun50i_h6, for the H616 sun50i_h616, for the R329 sun50i_r329, for the A523
+sun55i_a523, and for the A733 sun60i_a733 (pending upstream TF-A support). Use::
 
   $ find plat/allwinner -name platform.mk
 
@@ -97,7 +98,10 @@ build command line::
 
     $ make BL31=/src/tf-a.git/build/sun50i_h616/debug/bl31.bin
 
-The same applies to the (optional) SCP firmware.
+The same applies to the (optional) SCP firmware. Boards based on the Allwinner
+A733 additionally compile the LPDDR5 PHY Management Unit (PMU) firmware during
+the SPL build using an ARCv2 GCC cross-compiler (``ARC_CROSS_COMPILE``) or an
+external ``PMU_FW`` binary; see :doc:`a733-pmu` for details.
 
 The file containing everything you need is called ``u-boot-sunxi-with-spl.bin``,
 you will find it in the root folder of your U-Boot (build) tree. Except for
