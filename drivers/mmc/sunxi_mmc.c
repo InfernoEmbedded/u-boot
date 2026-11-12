@@ -417,8 +417,16 @@ static int sunxi_mmc_send_cmd_common(struct sunxi_mmc_priv *priv,
 		goto out;
 
 	if (data) {
-		timeout_msecs = 120;
-		debug("cacl timeout %x msec\n", timeout_msecs);
+		/*
+		 * Scale timeout with transfer size (~4 ms per KiB) so large
+		 * multi-block transfers at 400 kHz card-init clock do not
+		 * hit a fixed 120 ms ceiling, clamping to UINT_MAX.
+		 */
+		u64 calc_msecs = 120ULL + (((u64)bytecnt * 4ULL) >> 10);
+
+		timeout_msecs = (calc_msecs > UINT_MAX) ? UINT_MAX :
+				(unsigned int)calc_msecs;
+		debug("calc timeout %u msec\n", timeout_msecs);
 		error = mmc_rint_wait(priv, mmc, timeout_msecs,
 				      data->blocks > 1 ?
 				      SUNXI_MMC_RINT_AUTO_COMMAND_DONE :
