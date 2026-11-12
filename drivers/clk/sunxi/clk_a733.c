@@ -72,6 +72,8 @@ static const struct ccu_clk_gate a733_gates[] = {
 	[CLK_BUS_OHCI1]		= GATE(0x130c, BIT(0)),
 	[CLK_BUS_EHCI1]		= GATE(0x130c, BIT(4)),
 
+	[CLK_PCIE_AUX]		= GATE(0x1380, BIT(31)),
+	[CLK_PCIE_AXI_SLV]	= GATE(0x1384, BIT(31)),
 	[CLK_SERDES_PHY]	= GATE(0x13c0, BIT(31)),
 	[CLK_AHB_SERDES]	= GATE(0x13c4, BIT(0)),
 
@@ -124,6 +126,8 @@ static const struct ccu_reset a733_resets[] = {
 	[RST_BUS_OHCI1]		= RESET(0x130c, BIT(16)),
 	[RST_BUS_EHCI1]		= RESET(0x130c, BIT(20)),
 
+	[RST_BUS_PCIE]		= RESET(0x138c, BIT(16)),
+	[RST_BUS_PCIE_PWRUP]	= RESET(0x138c, BIT(17)),
 	[RST_BUS_SERDES]	= RESET(0x13c4, BIT(16)),
 
 	[RST_BUS_GMAC0]		= RESET(0x141c, BIT(16)),
