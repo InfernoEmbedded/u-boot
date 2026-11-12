@@ -37,6 +37,8 @@
 #include <asm/arch/dram_suniv.h>
 #elif defined(CONFIG_MACH_SUN55I_A523)
 #include <asm/arch/dram_sun55i_a523.h>
+#elif defined(CONFIG_DRAM_SUN60I_A733)
+/* A733 DRAM registers are private to dram_sun60i_a733.c */
 #else
 #include <asm/arch/dram_sun4i.h>
 #endif

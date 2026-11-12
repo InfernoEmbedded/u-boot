@@ -62,6 +62,21 @@ config DRAM_SUN55I_A523
 	help
 	  Select this DRAM controller driver for A523/T527 SoCs.
 
+config DRAM_SUN60I_A733
+	bool
+	help
+	  Select this LPDDR5 DRAM controller and Synopsys DDR PHY driver for
+	  Allwinner A733/T736 SoCs.
+
+config DRAM_SUN60I_A733_PIN_SWIZZLE
+	bool "Allwinner A733 LPDDR5 CA/DQ pin swizzle"
+	depends on DRAM_SUN60I_A733
+	help
+	  Program the CA0..CA6 and DQ0..DQ7 lane permutation used on boards
+	  such as the Orange Pi 4 Pro. Disable this option on boards that use
+	  a non-swizzled or custom PCB trace mapping to the LPDDR5 memory
+	  package.
+
 if DRAM_SUN50I_H616 || DRAM_SUN50I_A133 || DRAM_SUN55I_A523
 config DRAM_SUNXI_DX_ODT
 	hex "DRAM DX ODT parameter"
@@ -741,10 +756,12 @@ config DRAM_CLK
 	default 744 if MACH_SUN50I_H6
 	default 720 if MACH_SUN50I_H616 || MACH_SUN50I_A133
 	default 1200 if MACH_SUN55I_A523
+	default 1800 if DRAM_SUN60I_A733
 	help
 	  Set the dram clock speed, valid range 240 - 480 (prior to sun9i),
 	  must be a multiple of 24. For the sun9i (A80), the tested values
-	  (for DDR3-1600) are 312 to 792.
+	  (for DDR3-1600) are 312 to 792. For sun60i (A733 LPDDR5), the WCK
+	  clock defaults to 1800 MHz (3600 MT/s).
 
 if MACH_SUN5I || MACH_SUN7I
 config DRAM_MBUS_CLK
@@ -760,6 +777,7 @@ config DRAM_ZQ
 	depends on !MACH_SUN50I_H616
 	depends on !MACH_SUN50I_A133
 	depends on !MACH_SUN55I_A523
+	depends on !DRAM_SUN60I_A733
 	default 123 if MACH_SUN4I || MACH_SUN5I || MACH_SUN6I || \
 		       MACH_SUN8I_A23 || MACH_SUN8I_A33 || MACH_SUN8I_A83T
 	default 127 if MACH_SUN7I
@@ -774,6 +792,7 @@ config DRAM_ODT_EN
 	bool "sunxi dram odt enable"
 	depends on !MACH_SUN50I_H616
 	depends on !MACH_SUN55I_A523
+	depends on !DRAM_SUN60I_A733
 	default y if MACH_SUN8I_A23
 	default y if MACH_SUNXI_H3_H5
 	default y if MACH_SUN8I_R40
