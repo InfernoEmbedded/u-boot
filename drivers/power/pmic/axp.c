@@ -10,12 +10,14 @@
 #if CONFIG_IS_ENABLED(SYSRESET)
 static int axp_sysreset_request(struct udevice *dev, enum sysreset_t type)
 {
+	ulong id = dev_get_driver_data(dev->parent);
+	u8 reg = (id == AXP318_ID) ? AXP318_SHUTDOWN : AXP152_SHUTDOWN;
 	int ret;
 
 	if (type != SYSRESET_POWER_OFF)
 		return -EPROTONOSUPPORT;
 
-	ret = pmic_clrsetbits(dev->parent, AXP152_SHUTDOWN, 0, AXP152_POWEROFF);
+	ret = pmic_clrsetbits(dev->parent, reg, 0, AXP152_POWEROFF);
 	if (ret < 0)
 		return ret;
 
