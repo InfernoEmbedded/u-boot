@@ -586,9 +586,10 @@ void sunxi_board_init(void)
 	defined CONFIG_AXP221_POWER || defined CONFIG_AXP305_POWER || \
 	defined CONFIG_AXP809_POWER || defined CONFIG_AXP818_POWER || \
 	defined CONFIG_AXP313_POWER || defined CONFIG_AXP717_POWER || \
-	defined CONFIG_AXP803_POWER
+	defined CONFIG_AXP803_POWER || defined CONFIG_AXP318W_POWER
 	power_failed = axp_init();
 
+#ifdef AXP_POWER_STATUS
 	if (IS_ENABLED(CONFIG_AXP_DISABLE_BOOT_ON_POWERON) && !power_failed) {
 		u8 boot_reason;
 
@@ -598,6 +599,7 @@ void sunxi_board_init(void)
 			pmic_bus_write(0x32, BIT(7));
 		}
 	}
+#endif
 
 #ifdef CONFIG_AXP_DCDC1_VOLT
 	power_failed |= axp_set_dcdc1(CONFIG_AXP_DCDC1_VOLT);
@@ -614,6 +616,12 @@ void sunxi_board_init(void)
 #ifdef CONFIG_AXP_DCDC5_VOLT
 	power_failed |= axp_set_dcdc5(CONFIG_AXP_DCDC5_VOLT);
 #endif
+#ifdef CONFIG_AXP_DCDC6_VOLT
+	power_failed |= axp_set_dcdc6(CONFIG_AXP_DCDC6_VOLT);
+#endif
+#ifdef CONFIG_AXP_DCDC7_VOLT
+	power_failed |= axp_set_dcdc7(CONFIG_AXP_DCDC7_VOLT);
+#endif
 
 #ifdef CONFIG_AXP_ALDO1_VOLT
 	power_failed |= axp_set_aldo1(CONFIG_AXP_ALDO1_VOLT);
@@ -626,6 +634,19 @@ void sunxi_board_init(void)
 #endif
 #ifdef CONFIG_AXP_ALDO4_VOLT
 	power_failed |= axp_set_aldo4(CONFIG_AXP_ALDO4_VOLT);
+#endif
+
+#ifdef CONFIG_AXP_BLDO1_VOLT
+	power_failed |= axp_set_bldo(1, CONFIG_AXP_BLDO1_VOLT);
+#endif
+#ifdef CONFIG_AXP_BLDO2_VOLT
+	power_failed |= axp_set_bldo(2, CONFIG_AXP_BLDO2_VOLT);
+#endif
+#ifdef CONFIG_AXP_BLDO3_VOLT
+	power_failed |= axp_set_bldo(3, CONFIG_AXP_BLDO3_VOLT);
+#endif
+#ifdef CONFIG_AXP_BLDO4_VOLT
+	power_failed |= axp_set_bldo(4, CONFIG_AXP_BLDO4_VOLT);
 #endif
 
 #ifdef CONFIG_AXP_DLDO1_VOLT

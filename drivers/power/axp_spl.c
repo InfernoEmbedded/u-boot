@@ -81,10 +81,45 @@ static const struct axp_reg_desc_spl axp_spl_dcdc_regulators[] = {
 	{ 0x11, BIT(0), 0x1a, 0x7f,  500, 1840,  10, 70 },
 };
 
+static const struct axp_reg_desc_spl axp_spl_aldo_regulators[] = {
+	{ 0x20, BIT(0), 0x24, 0x1f,  500, 3400, 100, NA },
+	{ 0x20, BIT(1), 0x25, 0x1f,  500, 3400, 100, NA },
+	{ 0x20, BIT(2), 0x26, 0x1f,  500, 3400, 100, NA },
+	{ 0x20, BIT(3), 0x27, 0x1f,  500, 3400, 100, NA },
+	{ 0x20, BIT(4), 0x28, 0x1f,  500, 3400, 100, NA },
+	{ 0x20, BIT(5), 0x29, 0x1f,  500, 3400, 100, NA },
+};
+
+static const struct axp_reg_desc_spl axp_spl_bldo_regulators[] = {
+	{ 0x20, BIT(6), 0x2a, 0x1f,  500, 3400, 100, NA },
+	{ 0x20, BIT(7), 0x2b, 0x1f,  500, 3400, 100, NA },
+	{ 0x21, BIT(0), 0x2c, 0x1f,  500, 3400, 100, NA },
+	{ 0x21, BIT(1), 0x2d, 0x1f,  500, 3400, 100, NA },
+	{ 0x21, BIT(2), 0x2e, 0x1f,  500, 3400, 100, NA },
+};
+
+static const struct axp_reg_desc_spl axp_spl_dldo_regulators[] = {
+	{ 0x22, BIT(0), 0x34, 0x1f,  500, 3400, 100, NA },
+	{ 0x22, BIT(1), 0x35, 0x1f,  500, 3400, 100, NA },
+	{ 0x22, BIT(2), 0x36, 0x1f,  500, 3400, 100, NA },
+	{ 0x22, BIT(3), 0x37, 0x1f,  500, 3400, 100, NA },
+	{ 0x22, BIT(4), 0x38, 0x1f,  500, 3400, 100, NA },
+	{ 0x22, BIT(5), 0x39, 0x1f,  500, 3400, 100, NA },
+};
+
+static const struct axp_reg_desc_spl axp_spl_eldo_regulators[] = {
+	{ 0x22, BIT(6), 0x3a, 0x3f,  500, 1500,  25, NA },
+	{ 0x22, BIT(7), 0x3b, 0x3f,  500, 1500,  25, NA },
+	{ 0x23, BIT(0), 0x3c, 0x3f,  500, 1500,  25, NA },
+	{ 0x23, BIT(1), 0x3d, 0x3f,  500, 1500,  25, NA },
+	{ 0x23, BIT(2), 0x3e, 0x3f,  500, 1500,  25, NA },
+	{ 0x23, BIT(3), 0x3f, 0x3f,  500, 1500,  25, NA },
+};
+
 #define AXP_CHIP_VERSION	0
 #define AXP_CHIP_VERSION_MASK	0
 #define AXP_CHIP_ID		0
-#define AXP_SHUTDOWN_REG	0x55
+#define AXP_SHUTDOWN_REG	AXP318_SHUTDOWN
 #define AXP_SHUTDOWN_MASK	BIT(7)
 
 #elif defined(CONFIG_AXP305_POWER)				/* AXP305 */
@@ -127,24 +162,36 @@ static u8 axp_mvolt_to_cfg(int mvolt, const struct axp_reg_desc_spl *reg)
 	return reg->split + mvolt / (reg->step_mV * 2);
 }
 
-static int axp_set_dcdc(int dcdc_num, unsigned int mvolt)
+static int axp_set_reg(const struct axp_reg_desc_spl *reg, unsigned int mvolt)
 {
-	const struct axp_reg_desc_spl *reg;
+	u8 cfg, val;
 	int ret;
 
-	if (dcdc_num < 1 || dcdc_num > ARRAY_SIZE(axp_spl_dcdc_regulators))
-		return -EINVAL;
-
-	reg = &axp_spl_dcdc_regulators[dcdc_num - 1];
+	if (mvolt == (unsigned int)-1)
+		return 0;
 
 	if (mvolt == 0)
 		return pmic_bus_clrbits(reg->enable_reg, reg->enable_mask);
 
-	ret = pmic_bus_write(reg->volt_reg, axp_mvolt_to_cfg(mvolt, reg));
+	cfg = axp_mvolt_to_cfg(mvolt, reg);
+	ret = pmic_bus_read(reg->volt_reg, &val);
+	if (ret)
+		return ret;
+
+	val = (val & ~reg->volt_mask) | (cfg & reg->volt_mask);
+	ret = pmic_bus_write(reg->volt_reg, val);
 	if (ret)
 		return ret;
 
 	return pmic_bus_setbits(reg->enable_reg, reg->enable_mask);
+}
+
+static int axp_set_dcdc(int dcdc_num, unsigned int mvolt)
+{
+	if (dcdc_num < 1 || dcdc_num > ARRAY_SIZE(axp_spl_dcdc_regulators))
+		return -EINVAL;
+
+	return axp_set_reg(&axp_spl_dcdc_regulators[dcdc_num - 1], mvolt);
 }
 
 int axp_set_dcdc1(unsigned int mvolt)
@@ -171,6 +218,62 @@ int axp_set_dcdc5(unsigned int mvolt)
 {
 	return axp_set_dcdc(5, mvolt);
 }
+
+#ifdef CONFIG_AXP318W_POWER
+int axp_set_dcdc6(unsigned int mvolt)
+{
+	return axp_set_dcdc(6, mvolt);
+}
+
+int axp_set_dcdc7(unsigned int mvolt)
+{
+	return axp_set_dcdc(7, mvolt);
+}
+
+int axp_set_aldo1(unsigned int mvolt)
+{
+	return axp_set_reg(&axp_spl_aldo_regulators[0], mvolt);
+}
+
+int axp_set_aldo2(unsigned int mvolt)
+{
+	return axp_set_reg(&axp_spl_aldo_regulators[1], mvolt);
+}
+
+int axp_set_aldo3(unsigned int mvolt)
+{
+	return axp_set_reg(&axp_spl_aldo_regulators[2], mvolt);
+}
+
+int axp_set_aldo4(unsigned int mvolt)
+{
+	return axp_set_reg(&axp_spl_aldo_regulators[3], mvolt);
+}
+
+int axp_set_bldo(int bldo_num, unsigned int mvolt)
+{
+	if (bldo_num < 1 || bldo_num > ARRAY_SIZE(axp_spl_bldo_regulators))
+		return -EINVAL;
+
+	return axp_set_reg(&axp_spl_bldo_regulators[bldo_num - 1], mvolt);
+}
+
+int axp_set_dldo(int dldo_num, unsigned int mvolt)
+{
+	if (dldo_num < 1 || dldo_num > ARRAY_SIZE(axp_spl_dldo_regulators))
+		return -EINVAL;
+
+	return axp_set_reg(&axp_spl_dldo_regulators[dldo_num - 1], mvolt);
+}
+
+int axp_set_eldo(int eldo_num, unsigned int mvolt)
+{
+	if (eldo_num < 1 || eldo_num > ARRAY_SIZE(axp_spl_eldo_regulators))
+		return -EINVAL;
+
+	return axp_set_reg(&axp_spl_eldo_regulators[eldo_num - 1], mvolt);
+}
+#endif
 
 int axp_init(void)
 {
