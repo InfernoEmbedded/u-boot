@@ -86,6 +86,24 @@ config SPL_MAX_SIZE
 	  sections), BSS excluded.  When defined, the linker checks that the
 	  actual size does not exceed it.
 
+config SPL_DISPOSABLE_INIT_RODATA
+	bool
+	depends on ARM64 && SPL_SEPARATE_BSS && !SPL_OF_CONTROL
+	help
+	  Place .init.rodata* sections after _image_binary_end in the SPL
+	  SRAM image so one-time initialization tables (such as DRAM PHY
+	  firmware) can be reclaimed by subsequent firmware stages (e.g.
+	  TF-A BL31) once early hardware bringup completes.
+
+config SPL_ACTIVE_MAX_SIZE
+	hex
+	depends on SPL_DISPOSABLE_INIT_RODATA
+	default 0x0
+	help
+	  When non-zero, maximum size in bytes of the active SPL image
+	  (_image_binary_end - __image_copy_start) before the disposable
+	  .init.rodata region begins.
+
 config SPL_PAD_TO
 	hex "Offset to which the SPL should be padded before appending the SPL payload"
 	default 0x7f8000 if ARCH_ROCKCHIP

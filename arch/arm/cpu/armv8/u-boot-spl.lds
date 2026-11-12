@@ -33,6 +33,9 @@ SECTIONS
 	.rodata : {
 		. = ALIGN(8);
 		*(SORT_BY_ALIGNMENT(SORT_BY_NAME(.rodata*)))
+#if !CONFIG_IS_ENABLED(DISPOSABLE_INIT_RODATA)
+		*(SORT_BY_ALIGNMENT(SORT_BY_NAME(.init.rodata*)))
+#endif
 	} >.sram
 
 	.data : {
@@ -66,6 +69,18 @@ SECTIONS
 	__image_copy_end = .;
 	_end = .;
 	_image_binary_end = .;
+
+#if CONFIG_IS_ENABLED(DISPOSABLE_INIT_RODATA)
+	/*
+	 * Disposable early-init read-only tables (e.g. DRAM PHY firmware/tables)
+	 * placed after _image_binary_end so subsequent firmware loads (such as
+	 * TF-A BL31) can reclaim this SRAM region once early bringup completes.
+	 */
+	.init.rodata : {
+		. = ALIGN(8);
+		*(SORT_BY_ALIGNMENT(SORT_BY_NAME(.init.rodata*)))
+	} >.sram
+#endif
 
 #ifdef CONFIG_SPL_SEPARATE_BSS
 	.bss : {
@@ -102,3 +117,8 @@ ASSERT(_image_binary_end % 8 == 0, \
 
 ASSERT(ADDR(.bss) % 8 == 0, \
        ".bss must be 8-byte aligned");
+
+#if CONFIG_IS_ENABLED(DISPOSABLE_INIT_RODATA) && CONFIG_SPL_ACTIVE_MAX_SIZE > 0
+ASSERT(_image_binary_end - __image_copy_start <= CONFIG_SPL_ACTIVE_MAX_SIZE, \
+       "SPL active binary exceeds CONFIG_SPL_ACTIVE_MAX_SIZE");
+#endif

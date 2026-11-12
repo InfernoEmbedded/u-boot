@@ -120,6 +120,7 @@ SECTIONS
 #endif
 		__start_rodata = .;
 		*(SORT_BY_ALIGNMENT(SORT_BY_NAME(.rodata*)))
+		*(SORT_BY_ALIGNMENT(SORT_BY_NAME(.init.rodata*)))
 	}
 
 	__u_boot_list ALIGN(8) : {

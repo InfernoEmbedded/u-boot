@@ -165,6 +165,10 @@ endif
 # 2) unit tests include device tree blobs
 OBJCOPYFLAGS += -j .dtb.init.rodata
 
+ifeq ($(CONFIG_SPL_DISPOSABLE_INIT_RODATA),y)
+SPL_OBJCFLAGS += -j .init.rodata
+endif
+
 ifdef CONFIG_EFI_LOADER
 OBJCOPYFLAGS += -j .efi_runtime -j .efi_runtime_rel
 endif
