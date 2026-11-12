@@ -31,6 +31,7 @@ struct sunxi_wdog {
 #else
 
 #define WDT_CFG_RESET		(0x1)
+#define WDT_CFG_KEY		(0x16aa << 16)
 #define WDT_MODE_EN		(0x1)
 
 struct sunxi_wdog {

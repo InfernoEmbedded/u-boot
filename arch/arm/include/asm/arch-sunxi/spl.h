@@ -11,6 +11,9 @@
 
 #define SPL_ADDR		CONFIG_SUNXI_SRAM_ADDRESS
 
+/* FEL swap buffer backup address in SH_SRAM (A733) */
+#define SUNXI_FEL_SPL_ADDR	0x000e0000
+
 /* The low 8-bits of the 'boot_media' field in the SPL header */
 #define SUNXI_BOOTED_FROM_MMC0	0
 #define SUNXI_BOOTED_FROM_NAND	1

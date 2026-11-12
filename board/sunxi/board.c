@@ -117,10 +117,14 @@ void i2c_init_board(void)
 	clock_twi_onoff(5, 1);
 	sunxi_gpio_set_cfgpin(SUNXI_GPL(0), SUN50I_H616_GPL_R_TWI);
 	sunxi_gpio_set_cfgpin(SUNXI_GPL(1), SUN50I_H616_GPL_R_TWI);
-#elif CONFIG_MACH_SUN55I_A523
+#elif defined(CONFIG_MACH_SUN55I_A523) || defined(CONFIG_MACH_SUN60I_A733)
 	clock_twi_onoff(5, 1);
 	sunxi_gpio_set_cfgpin(SUNXI_GPL(0), SUN50I_GPL_R_TWI);
 	sunxi_gpio_set_cfgpin(SUNXI_GPL(1), SUN50I_GPL_R_TWI);
+#ifdef CONFIG_MACH_SUN60I_A733
+	sunxi_gpio_set_pull(SUNXI_GPL(0), SUNXI_GPIO_PULL_UP);
+	sunxi_gpio_set_pull(SUNXI_GPL(1), SUNXI_GPIO_PULL_UP);
+#endif
 #else
 	clock_twi_onoff(5, 1);
 	sunxi_gpio_set_cfgpin(SUNXI_GPL(0), SUN8I_H3_GPL_R_TWI);
@@ -243,7 +247,18 @@ int board_init(void)
 static struct boot_file_head * get_spl_header(uint8_t req_version)
 {
 	struct boot_file_head *spl = (void *)(ulong)SPL_ADDR;
-	uint8_t spl_header_version = spl->spl_signature[3];
+	u8 spl_header_version;
+
+	/*
+	 * In FEL mode on A733, sunxi-fel uses an SRAM swap buffer to preserve
+	 * the BROM stack. When returning from SPL to FEL, BROM state is
+	 * restored to SPL_ADDR (0x47000), leaving the SPL header in SH_SRAM.
+	 */
+	if (IS_ENABLED(CONFIG_MACH_SUN60I_A733) &&
+	    memcmp(spl->spl_signature, SPL_SIGNATURE, 3) != 0)
+		spl = (void *)(ulong)SUNXI_FEL_SPL_ADDR;
+
+	spl_header_version = spl->spl_signature[3];
 
 	/* Is there really the SPL header (still) there? */
 	if (memcmp(spl->spl_signature, SPL_SIGNATURE, 3) != 0)
@@ -448,7 +463,7 @@ static void mmc_pinmux_setup(int sdc)
 			sunxi_gpio_set_drv(pin, 2);
 		}
 #elif defined(CONFIG_MACH_SUN50I_H616) || defined(CONFIG_MACH_SUN50I_A133) || \
-      defined(CONFIG_MACH_SUN55I_A523)
+	defined(CONFIG_MACH_SUN55I_A523) || defined(CONFIG_MACH_SUN60I_A733)
 		/* SDC2: PC0-PC1, PC5-PC6, PC8-PC11, PC13-PC16 */
 		for (pin = SUNXI_GPC(0); pin <= SUNXI_GPC(16); pin++) {
 			if (pin > SUNXI_GPC(1) && pin < SUNXI_GPC(5))
