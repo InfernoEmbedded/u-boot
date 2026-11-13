@@ -235,6 +235,10 @@ int board_init(void)
 
 	eth_init_board();
 
+	if (IS_ENABLED(CONFIG_MACH_SUN60I_A733) &&
+	    IS_ENABLED(CONFIG_PCIE_DW_SUNXI))
+		sunxi_a733_pcie_soc_init();
+
 	return 0;
 }
 

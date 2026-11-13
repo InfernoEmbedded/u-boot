@@ -20,6 +20,7 @@ static const struct ccu_clk_gate a733_gates[] = {
 	[CLK_APB_UART]		= GATE_DUMMY,
 
 	[CLK_MBUS_GMAC0]	= GATE(0x05e4, BIT(11)),
+	[CLK_MBUS_SERDES]	= GATE(0x0584, BIT(0)),
 	[CLK_BUS_CE]		= GATE(0x0ac4, BIT(0)),
 
 	[CLK_MMC0]		= GATE(0x0d00, BIT(31)),
@@ -71,6 +72,9 @@ static const struct ccu_clk_gate a733_gates[] = {
 	[CLK_BUS_OHCI1]		= GATE(0x130c, BIT(0)),
 	[CLK_BUS_EHCI1]		= GATE(0x130c, BIT(4)),
 
+	[CLK_SERDES_PHY]	= GATE(0x13c0, BIT(31)),
+	[CLK_AHB_SERDES]	= GATE(0x13c4, BIT(0)),
+
 	[CLK_GMAC0_PHY]		= GATE(0x1410, BIT(31)),
 	[CLK_BUS_GMAC0]		= GATE(0x141c, BIT(0)),
 };
@@ -119,6 +123,8 @@ static const struct ccu_reset a733_resets[] = {
 	[RST_USB_PHY1]		= RESET(0x1308, BIT(30)),
 	[RST_BUS_OHCI1]		= RESET(0x130c, BIT(16)),
 	[RST_BUS_EHCI1]		= RESET(0x130c, BIT(20)),
+
+	[RST_BUS_SERDES]	= RESET(0x13c4, BIT(16)),
 
 	[RST_BUS_GMAC0]		= RESET(0x141c, BIT(16)),
 	[RST_BUS_GMAC0_AXI]	= RESET(0x141c, BIT(17)),

@@ -331,3 +331,71 @@ unsigned int clock_get_pll6(void)
 
 	return 24000000U * n / m / div1 / div2;
 }
+
+#ifndef CONFIG_XPL_BUILD
+#ifdef CONFIG_MACH_SUN60I_A733
+#define A733_RTC_XO_CTRL1_OFF		0x016c
+#define A733_RTC_XO_CLK_OUT_EN		(BIT(9) | BIT(8) | BIT(5) | BIT(4))
+#define A733_CCU_MBUS_CLK_REG		0x0574
+#define A733_CCU_MBUS_MAT_CLK_GATE_REG	0x0580
+#define A733_CCU_MBUS_MAT_SERDES_EN	(BIT(31) | BIT(30) | BIT(25) | BIT(24))
+#define A733_CCU_MBUS_SERDES_GATE_REG	0x0584
+#define A733_CCU_MBUS_SERDES_CFG_REG	0x0588
+#define A733_CCU_MBUS_CLK_CFG0_REG	0x058c
+#define A733_CCU_MBUS_CLK_CFG1_REG	0x05b4
+#define A733_CCU_PCIE_AXI_SLV_REG	0x1384
+#define A733_CCU_SERDES_PHY_CFG_REG	0x13c0
+#define A733_CCU_CM_PCIE0_MODE_REG	0x1b28
+
+#define A733_SYS_PLL_CTRL_REG		0x02001540UL
+#define A733_SYS_PLL_BGR_REG		0x0200154cUL
+#define A733_NSI_BASE			0x02020000UL
+#define A733_NSI_PORT_STRIDE		0x200UL
+#define A733_NSI_NUM_PORTS		16
+#define A733_PCIE_ITS_AXI_REG		0x08868020UL
+
+/*
+ * Configure SoC-level RTC DCXO feed, CCU muxes/dividers, MBUS/SYS_PLL gates,
+ * PCIe ITS AXI bridge, and NSI QoS not yet modeled by U-Boot's gate-only
+ * sunxi CCU/RTC/NSI drivers.
+ */
+void sunxi_a733_pcie_soc_init(void)
+{
+	void *const rtc = (void *)(ulong)SUNXI_RTC_BASE;
+	void *const ccm = (void *)(ulong)SUNXI_CCM_BASE;
+	int p;
+
+	/* Enable RTC DCXO clock feed to Combo PHY without clobbering siblings */
+	setbits_le32(rtc + A733_RTC_XO_CTRL1_OFF, A733_RTC_XO_CLK_OUT_EN);
+
+	/* Configure PCIe/SerDes CCU muxes/dividers and MBUS/NSI gating */
+	writel(0x82000000, ccm + A733_CCU_PCIE_AXI_SLV_REG); /* 400 MHz */
+	writel(0x81000005, ccm + A733_CCU_SERDES_PHY_CFG_REG); /* 100 MHz */
+	writel(0x00020001, ccm + A733_CCU_CM_PCIE0_MODE_REG);
+	writel(0x00010002, ccm + A733_CCU_MBUS_CLK_REG);
+	setbits_le32(ccm + A733_CCU_MBUS_MAT_CLK_GATE_REG,
+		     A733_CCU_MBUS_MAT_SERDES_EN);
+	writel(0x00010001, ccm + A733_CCU_MBUS_SERDES_GATE_REG);
+	writel(0x81000000, ccm + A733_CCU_MBUS_SERDES_CFG_REG);
+	setbits_le32(ccm + A733_CCU_MBUS_CLK_CFG0_REG, 0x00010007);
+	setbits_le32(ccm + A733_CCU_MBUS_CLK_CFG1_REG, 0x00010007);
+
+	writel(0xc0000000, (void *)(ulong)A733_SYS_PLL_CTRL_REG);
+	writel(0x00010001, (void *)(ulong)A733_SYS_PLL_BGR_REG);
+
+	/* Configure NSI interconnect QoS & bandwidth across ports 0..15 */
+	for (p = 0; p < A733_NSI_NUM_PORTS; p++) {
+		void *port = (void *)(ulong)(A733_NSI_BASE +
+					     A733_NSI_PORT_STRIDE * p);
+
+		writel(0x00000001, port + 0x0c);
+		writel(0x00000001, port + 0x18);
+		writel(0x000003e8, port + 0x28);
+		writel(0x000000ff, port + 0x2c);
+		writel(0x00000001, port + 0xcc);
+	}
+
+	writel(0x00ff00ff, (void *)(ulong)A733_PCIE_ITS_AXI_REG);
+}
+#endif
+#endif

@@ -35,6 +35,7 @@ void clock_set_de_mod_clock(u32 *clk_cfg, unsigned int hz);
 void clock_init_safe(void);
 void clock_init_sec(void);
 void clock_init_uart(void);
+void sunxi_a733_pcie_soc_init(void);
 #endif
 
 #endif /* _SUNXI_CLOCK_H */

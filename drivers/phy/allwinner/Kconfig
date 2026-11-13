@@ -33,3 +33,11 @@ config PHY_SUN50I_USB3
 	help
 	  Enable this to support the USB3 transceiver that is part of
 	  Allwinner sun50i SoCs.
+
+config PHY_SUN60I_COMBOPHY
+	bool "Allwinner sun60i A733 Combo PHY driver"
+	depends on MACH_SUN60I_A733
+	select PHY
+	help
+	  Enable this to support the Cadence Combo PHY (PCIe / USB3)
+	  on Allwinner sun60i (A733) SoCs.
