@@ -65,8 +65,28 @@ config DRAM_SUN55I_A523
 config DRAM_SUN60I_A733
 	bool
 	help
-	  Select this LPDDR5 DRAM controller and Synopsys DDR PHY driver for
+	  Select this DRAM controller and Synopsys DDR PHY driver for
 	  Allwinner A733/T736 SoCs.
+
+choice
+	prompt "Allwinner A733 DRAM Type"
+	depends on DRAM_SUN60I_A733
+	default DRAM_SUN60I_A733_LPDDR5
+
+config DRAM_SUN60I_A733_LPDDR4
+	bool "Allwinner A733 LPDDR4 memory"
+	help
+	  Enable support for LPDDR4 memory attached to the Allwinner A733
+	  uMCTL2 and Synopsys DDR PHY (e.g. Radxa Cubie A7Z).
+	  NOTE: Experimental and untested on physical hardware!
+
+config DRAM_SUN60I_A733_LPDDR5
+	bool "Allwinner A733 LPDDR5 memory"
+	help
+	  Enable support for LPDDR5 memory attached to the Allwinner A733
+	  uMCTL2 and Synopsys DDR PHY (e.g. Xunlong Orange Pi 4 Pro).
+
+endchoice
 
 config DRAM_SUN60I_A733_PIN_SWIZZLE
 	bool "Allwinner A733 LPDDR5 CA/DQ pin swizzle"

@@ -26,6 +26,8 @@
 #define CCU_DRAM0_CLK_REG		0x02002c00UL
 #define UMCTL2_CH0_BASE			0x0a110000UL
 #define UMCTL2_MSTR_OFFSET		0x000UL
+#define UMCTL2_MSTR_DEVICETYPE_MASK	GENMASK(5, 0)
+#define UMCTL2_MSTR_DEVICETYPE_LPDDR4	0x02U
 #define UMCTL2_MSTR_LPDDR5		BIT(19)
 
 #ifdef CONFIG_XPL_BUILD
@@ -324,11 +326,17 @@ static int mctl_write_regs_offset(const struct sunxi_dram_reg *regs, u32 count,
 		uintptr_t addr = regs[i].addr;
 		u32 val = regs[i].val;
 
-		if (addr == UMCTL2_CH0_BASE + UMCTL2_MSTR_OFFSET)
+		if (addr == UMCTL2_CH0_BASE + UMCTL2_MSTR_OFFSET) {
 			val = (val & ~(UMCTL2_MSTR_RANKS_MASK << UMCTL2_MSTR_RANKS_SHIFT)) |
 			      ((u32)rank_mask << UMCTL2_MSTR_RANKS_SHIFT);
-		else if (addr == UMCTL2_CH0_BASE + UMCTL2_DERATEINT_OFFSET)
+			if (IS_ENABLED(CONFIG_DRAM_SUN60I_A733_LPDDR4)) {
+				val &= ~UMCTL2_MSTR_LPDDR5;
+				val &= ~UMCTL2_MSTR_DEVICETYPE_MASK;
+				val |= UMCTL2_MSTR_DEVICETYPE_LPDDR4;
+			}
+		} else if (addr == UMCTL2_CH0_BASE + UMCTL2_DERATEINT_OFFSET) {
 			val = ((u32)rank_mask << 8) | rank_mask;
+		}
 
 		if (addr >= UMCTL2_CH0_APERTURE_BASE &&
 		    addr < UMCTL2_CH0_APERTURE_END)
@@ -746,6 +754,13 @@ static int mctl_apply_post_pmu_config(u8 rank_mask)
 	uintptr_t ctrl = SUNXI_DRAM_PHY_CTRL_BASE;
 	int ret;
 
+	/*
+	 * LPDDR4 skips the LPDDR5 post-PMU uMCTL2/MR16/MR14/MR15 sequence
+	 * (verified in boot0_cubie-a7z.fex).
+	 */
+	if (IS_ENABLED(CONFIG_DRAM_SUN60I_A733_LPDDR4))
+		return 0;
+
 	ret = mctl_write_regs_offset(dram_post_pmu_ch_regs,
 				     ARRAY_SIZE(dram_post_pmu_ch_regs),
 				     0x00000000UL, rank_mask);
@@ -829,9 +844,10 @@ static int mctl_ccu_init(void)
 	writel(0xcb000000, (void __iomem *)CCU_MBUS_CLK_REG);
 	writel(0x88000003, (void __iomem *)CCU_DRAM0_CLK_REG);
 
-	/* Enable dual-channel DRAMC and AXI host ports */
+	/* Enable dual-channel DRAMC (bit 1) and LPDDR5 flag (bit 0) */
 	writel(0x00002728, (void __iomem *)DRAMC_SYS_CFG_REG);
-	writel(0x00000003, (void __iomem *)DRAMC_CH_EN_REG);
+	writel(IS_ENABLED(CONFIG_DRAM_SUN60I_A733_LPDDR4) ? 0x00000002 : 0x00000003,
+	       (void __iomem *)DRAMC_CH_EN_REG);
 	writel(0x00000103, (void __iomem *)DRAMC_CH0_PORT_CFG_REG);
 	writel(0x000013ff, (void __iomem *)DRAMC_CH0_PORT_EN_REG);
 	writel(0x00000103, (void __iomem *)DRAMC_CH1_PORT_CFG_REG);
@@ -855,18 +871,23 @@ static int mctl_ccu_init(void)
  */
 static int mctl_pre_pmu_init(u8 rank_mask)
 {
+	const struct sunxi_dram_reg *ch_regs = dram_umctl2_ch_regs;
+	u32 ch_regs_count = ARRAY_SIZE(dram_umctl2_ch_regs);
 	int ret;
+
+	if (IS_ENABLED(CONFIG_DRAM_SUN60I_A733_LPDDR4)) {
+		ch_regs = dram_umctl2_ch_regs_lpddr4;
+		ch_regs_count = ARRAY_SIZE(dram_umctl2_ch_regs_lpddr4);
+	}
 
 	ret = mctl_ccu_init();
 	if (ret)
 		return ret;
-	ret = mctl_write_regs_offset(dram_umctl2_ch_regs,
-				     ARRAY_SIZE(dram_umctl2_ch_regs),
+	ret = mctl_write_regs_offset(ch_regs, ch_regs_count,
 				     0x00000000UL, rank_mask);
 	if (ret)
 		return ret;
-	ret = mctl_write_regs_offset(dram_umctl2_ch_regs,
-				     ARRAY_SIZE(dram_umctl2_ch_regs),
+	ret = mctl_write_regs_offset(ch_regs, ch_regs_count,
 				     UMCTL2_CH_STRIDE, rank_mask);
 	if (ret)
 		return ret;
@@ -896,6 +917,25 @@ static int mctl_phy_init(u8 rank_mask, bool log_err)
 	msg.dram_rate_mts = clamp((u32)CONFIG_DRAM_CLK / 24U, 1U, 256U) * 48U;
 	msg.ch0_rank_en = rank_mask;
 	msg.ch1_rank_en = rank_mask;
+	if (IS_ENABLED(CONFIG_DRAM_SUN60I_A733_LPDDR4)) {
+		/*
+		 * Set MR19[1:0]=1 / MR20[1:0]=0 so pmu_is_lpddr4() matches in
+		 * pmu_telemetry.c. NOTE: dram_phy_init_regs, dram_phy_pre_dmem_regs,
+		 * dram_pie_*, and arch/arm/mach-sunxi/pmu/ are still LPDDR5-derived
+		 * and need LPDDR4 PHY/PIE/PMU support before booting real hardware.
+		 */
+		msg.mr1[0] = 0x8c; msg.mr1[1] = 0x8c; msg.mr1[2] = 0x8c; msg.mr1[3] = 0x8c;
+		msg.mr2[0] = 0x00; msg.mr2[1] = 0x00; msg.mr2[2] = 0x00; msg.mr2[3] = 0x00;
+		msg.mr3[0] = 0x33; msg.mr3[1] = 0x33; msg.mr3[2] = 0x33; msg.mr3[3] = 0x33;
+		msg.mr11[0] = 0x04; msg.mr11[1] = 0x04; msg.mr11[2] = 0x04; msg.mr11[3] = 0x04;
+		msg.mr12[0] = 0x72; msg.mr12[1] = 0x72; msg.mr12[2] = 0x72; msg.mr12[3] = 0x72;
+		msg.mr13[0] = 0x08; msg.mr13[1] = 0x08; msg.mr13[2] = 0x08; msg.mr13[3] = 0x08;
+		msg.mr14[0] = 0x1d; msg.mr14[1] = 0x1d; msg.mr14[2] = 0x1d; msg.mr14[3] = 0x1d;
+		msg.mr15[0] = 0x1d; msg.mr15[1] = 0x1d; msg.mr15[2] = 0x1d; msg.mr15[3] = 0x1d;
+		msg.mr19[0] = 0x01; msg.mr19[1] = 0x01; msg.mr19[2] = 0x01; msg.mr19[3] = 0x01;
+		msg.mr20[0] = 0x00; msg.mr20[1] = 0x00; msg.mr20[2] = 0x00; msg.mr20[3] = 0x00;
+		msg.mr22[0] = 0x24; msg.mr22[1] = 0x24; msg.mr22[2] = 0x24; msg.mr22[3] = 0x24;
+	}
 	if (!IS_ENABLED(CONFIG_DRAM_SUN60I_A733_PIN_SWIZZLE))
 		msg.dq_swap_en = 0;
 
@@ -980,6 +1020,57 @@ static int mctl_read_mr(unsigned int ch, unsigned int rank, u8 mr_addr, u8 *val)
 }
 
 /**
+ * mctl_mr8_lpddr4_rank_size_mb() - Decode JEDEC LPDDR4 MR8 into rank capacity in MiB
+ * @mr8: Raw 8-bit JEDEC Mode Register 8 (JESD209-4) value
+ *
+ * Decodes the die density code (bits [5:2]) and I/O width (bits [7:6]) from
+ * LPDDR4 MR8.
+ *
+ * Return: Rank capacity in MiB, or 0 if @mr8 is invalid.
+ */
+static unsigned long mctl_mr8_lpddr4_rank_size_mb(u8 mr8)
+{
+	u8 density = (mr8 >> 2) & 0x0fU;
+	u8 io_width = (mr8 >> 6) & 0x03U;
+	unsigned long die_mb;
+
+	switch (density) {
+	case 0x0:
+		die_mb = 512;	/* 4 Gb */
+		break;
+	case 0x1:
+		die_mb = 768;	/* 6 Gb */
+		break;
+	case 0x2:
+		die_mb = 1024;	/* 8 Gb */
+		break;
+	case 0x3:
+		die_mb = 1536;	/* 12 Gb */
+		break;
+	case 0x4:
+		die_mb = 2048;	/* 16 Gb */
+		break;
+	case 0x5:
+		die_mb = 3072;	/* 24 Gb */
+		break;
+	case 0x6:
+		die_mb = 4096;	/* 32 Gb */
+		break;
+	case 0xc:
+		die_mb = 256;	/* 2 Gb */
+		break;
+	default:
+		return 0;
+	}
+
+	/* In x8 byte mode (io_width == 1), two x8 dies form one 16-bit rank */
+	if (io_width == 1U)
+		die_mb <<= 1;
+
+	return die_mb;
+}
+
+/**
  * mctl_mr8_rank_size_mb() - Decode JEDEC LPDDR5 MR8 into rank capacity in MiB
  * @mr8: Raw 8-bit JEDEC Mode Register 8 (JESD209-5) value
  *
@@ -1026,9 +1117,14 @@ static unsigned long mctl_mr8_rank_size_mb(u8 mr8)
 static unsigned long sun60i_a733_get_dram_size(void)
 {
 	u32 ch0_mstr = readl((void __iomem *)(UMCTL2_CH0_BASE + UMCTL2_MSTR_OFFSET));
-	u32 ch_mask = readl((void __iomem *)DRAMC_CH_EN_REG) & 0x03U;
+	u32 dramc_ch_en = readl((void __iomem *)DRAMC_CH_EN_REG);
+	u32 ch_mask = (dramc_ch_en & BIT(1)) ? 0x03U : 0x01U;
+	bool is_lpddr5 = !!(ch0_mstr & UMCTL2_MSTR_LPDDR5);
+	bool is_lpddr4 = ((ch0_mstr & UMCTL2_MSTR_DEVICETYPE_MASK) ==
+			  UMCTL2_MSTR_DEVICETYPE_LPDDR4) ||
+			 IS_ENABLED(CONFIG_DRAM_SUN60I_A733_LPDDR4);
 
-	if (ch0_mstr & UMCTL2_MSTR_LPDDR5) {
+	if (is_lpddr5 || is_lpddr4) {
 		unsigned long total_mb = 0;
 		unsigned int ch, rank;
 
@@ -1053,7 +1149,10 @@ static unsigned long sun60i_a733_get_dram_size(void)
 				if (mctl_read_mr(ch, rank, 8, &mr8) < 0)
 					continue;
 
-				total_mb += mctl_mr8_rank_size_mb(mr8);
+				if (is_lpddr5)
+					total_mb += mctl_mr8_rank_size_mb(mr8);
+				else
+					total_mb += mctl_mr8_lpddr4_rank_size_mb(mr8);
 			}
 		}
 
@@ -1276,6 +1375,10 @@ static const char *sun60i_a733_dram_type_name(void)
 
 	if (mstr & UMCTL2_MSTR_LPDDR5)
 		return "LPDDR5";
+	if ((mstr & UMCTL2_MSTR_DEVICETYPE_MASK) == UMCTL2_MSTR_DEVICETYPE_LPDDR4)
+		return "LPDDR4";
+	if (IS_ENABLED(CONFIG_DRAM_SUN60I_A733_LPDDR4))
+		return "LPDDR4";
 
 	return "Unknown";
 }
